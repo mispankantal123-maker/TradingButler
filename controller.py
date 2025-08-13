@@ -3,13 +3,7 @@ MT5 Bot Controller
 Handles MT5 connection, trading logic, and market data processing
 """
 
-try:
-    import MetaTrader5 as mt5
-    MT5_AVAILABLE = True
-except ImportError:
-    # Fallback for development environment only
-    import mock_mt5 as mt5
-    MT5_AVAILABLE = False
+import MetaTrader5 as mt5
 import numpy as np
 import pandas as pd
 from datetime import datetime, time
@@ -44,7 +38,7 @@ class BotController(QObject):
         self.is_connected = False
         self.is_running = False
         self.shadow_mode = True
-        self.demo_mode = not MT5_AVAILABLE  # Track if running in demo mode
+        self.demo_mode = False  # Production mode only
         
         # Configuration
         self.config = {
@@ -81,9 +75,7 @@ class BotController(QObject):
     def connect_mt5(self) -> bool:
         """Connect to MT5 terminal"""
         try:
-            # Warning for demo mode
-            if self.demo_mode:
-                self.signal_log.emit("⚠️ DEMO MODE: Using simulated data. Install MetaTrader5 for live trading!", "WARNING")
+            # Production MT5 connection
             
             if not mt5.initialize():
                 error = mt5.last_error()
@@ -97,9 +89,8 @@ class BotController(QObject):
                 return False
             
             self.is_connected = True
-            mode_text = " (DEMO MODE)" if self.demo_mode else ""
-            self.signal_log.emit(f"Connected to MT5{mode_text} - Account: {account_info.login}", "INFO")
-            self.signal_status.emit(f"Connected{mode_text}")
+            self.signal_log.emit(f"Connected to MT5 - Account: {account_info.login}", "INFO")
+            self.signal_status.emit("Connected")
             
             return True
             

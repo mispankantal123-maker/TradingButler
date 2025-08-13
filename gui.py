@@ -517,13 +517,19 @@ class MainWindow(QMainWindow):
             
             # Update account info if connected
             if self.controller.is_connected:
-                import MetaTrader5 as mt5
-                account_info = mt5.account_info()
-                if account_info:
-                    self.balance_label.setText(f"{account_info.balance:.2f}")
-                    self.equity_label.setText(f"{account_info.equity:.2f}")
-                    self.margin_label.setText(f"{account_info.margin:.2f}")
-                    self.pnl_label.setText(f"{account_info.profit:.2f}")
+                try:
+                    import MetaTrader5 as mt5
+                    account_info = mt5.account_info()
+                    if account_info:
+                        self.balance_label.setText(f"{account_info.balance:.2f}")
+                        self.equity_label.setText(f"{account_info.equity:.2f}")
+                        self.margin_label.setText(f"{account_info.margin:.2f}")
+                        self.pnl_label.setText(f"{account_info.profit:.2f}")
+                except ImportError:
+                    self.balance_label.setText("MT5 Not Available")
+                    self.equity_label.setText("MT5 Not Available")
+                    self.margin_label.setText("MT5 Not Available")
+                    self.pnl_label.setText("MT5 Not Available")
         except Exception as e:
             pass  # Ignore errors during GUI updates
     
