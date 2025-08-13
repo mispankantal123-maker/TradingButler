@@ -1,2 +1,30 @@
+modules = ["python-3.11"]
 [agent]
 expertMode = true
+
+[nix]
+channel = "stable-25_05"
+packages = ["glibcLocales", "libxcrypt", "mesa", "xorg.libX11", "xorg.libXext", "libGL", "libxkbcommon", "glib", "fontconfig", "freetype", "qt6.qtbase"]
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "MT5 Scalping Bot"
+
+[[workflows.workflow]]
+name = "MT5 Scalping Bot"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "vnc"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
