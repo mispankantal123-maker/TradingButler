@@ -469,17 +469,17 @@ class MainWindow(QMainWindow):
         # Update indicators
         if 'indicators_m1' in data:
             ind_m1 = data['indicators_m1']
-            self.ema9_m1_label.setText(f"{ind_m1.get('ema9', 0):.5f}" if ind_m1.get('ema9') else "N/A")
-            self.ema21_m1_label.setText(f"{ind_m1.get('ema21', 0):.5f}" if ind_m1.get('ema21') else "N/A")
-            self.ema50_m1_label.setText(f"{ind_m1.get('ema50', 0):.5f}" if ind_m1.get('ema50') else "N/A")
+            self.ema9_m1_label.setText(f"{ind_m1.get('ema_fast', 0):.5f}" if ind_m1.get('ema_fast') else "N/A")
+            self.ema21_m1_label.setText(f"{ind_m1.get('ema_medium', 0):.5f}" if ind_m1.get('ema_medium') else "N/A")
+            self.ema50_m1_label.setText(f"{ind_m1.get('ema_slow', 0):.5f}" if ind_m1.get('ema_slow') else "N/A")
             self.rsi_m1_label.setText(f"{ind_m1.get('rsi', 0):.2f}" if ind_m1.get('rsi') else "N/A")
             self.atr_m1_label.setText(f"{ind_m1.get('atr', 0):.5f}" if ind_m1.get('atr') else "N/A")
         
         if 'indicators_m5' in data:
             ind_m5 = data['indicators_m5']
-            self.ema9_m5_label.setText(f"{ind_m5.get('ema9', 0):.5f}" if ind_m5.get('ema9') else "N/A")
-            self.ema21_m5_label.setText(f"{ind_m5.get('ema21', 0):.5f}" if ind_m5.get('ema21') else "N/A")
-            self.ema50_m5_label.setText(f"{ind_m5.get('ema50', 0):.5f}" if ind_m5.get('ema50') else "N/A")
+            self.ema9_m5_label.setText(f"{ind_m5.get('ema_fast', 0):.5f}" if ind_m5.get('ema_fast') else "N/A")
+            self.ema21_m5_label.setText(f"{ind_m5.get('ema_medium', 0):.5f}" if ind_m5.get('ema_medium') else "N/A")
+            self.ema50_m5_label.setText(f"{ind_m5.get('ema_slow', 0):.5f}" if ind_m5.get('ema_slow') else "N/A")
             self.rsi_m5_label.setText(f"{ind_m5.get('rsi', 0):.2f}" if ind_m5.get('rsi') else "N/A")
             self.atr_m5_label.setText(f"{ind_m5.get('atr', 0):.5f}" if ind_m5.get('atr') else "N/A")
     
@@ -507,6 +507,14 @@ class MainWindow(QMainWindow):
             self.positions_table.setItem(row, 5, QTableWidgetItem(f"{pos['tp']:.5f}"))
             self.positions_table.setItem(row, 6, QTableWidgetItem(f"{pos['profit']:.2f}"))
             self.positions_table.setItem(row, 7, QTableWidgetItem(pos['comment']))
+    
+    @Slot(dict)
+    def update_account_display(self, account_data: Dict):
+        """Update account information display"""
+        self.balance_label.setText(f"{account_data['balance']:.2f}")
+        self.equity_label.setText(f"{account_data['equity']:.2f}")
+        self.margin_label.setText(f"{account_data['margin']:.2f}")
+        self.pnl_label.setText(f"{account_data['profit']:.2f}")
     
     def update_gui_data(self):
         """Periodic GUI data update"""

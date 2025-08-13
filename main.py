@@ -56,6 +56,7 @@ def main():
         controller.signal_market_data.connect(main_window.update_market_data)
         controller.signal_trade_signal.connect(main_window.update_trade_signal)
         controller.signal_position_update.connect(main_window.update_positions)
+        controller.signal_account_update.connect(main_window.update_account_display)
         
         # Show main window
         main_window.show()
