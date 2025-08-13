@@ -121,6 +121,22 @@ class BotController(QObject):
         except Exception as e:
             self.signal_log.emit(f"Disconnect error: {e}", "ERROR")
     
+    def find_available_gold_symbol(self, preferred_symbol: str) -> Optional[str]:
+        """Find available XAUUSD symbol with fallback strategy"""
+        # Priority order for XAUUSD symbols
+        symbol_priority = [preferred_symbol, 'XAUUSD', 'XAUUSDm', 'XAUUSDc']
+        
+        for symbol in symbol_priority:
+            try:
+                if validate_symbol(symbol):
+                    self.signal_log.emit(f"Found available symbol: {symbol}", "INFO")
+                    return symbol
+            except Exception as e:
+                self.logger.warning(f"Could not validate {symbol}: {e}")
+                continue
+        
+        return None
+    
     def update_config(self, new_config: Dict):
         """Update bot configuration"""
         self.config.update(new_config)
@@ -132,13 +148,21 @@ class BotController(QObject):
             self.signal_log.emit("Not connected to MT5", "ERROR")
             return False
         
+        # Smart symbol selection with fallback
         symbol = self.config['symbol']
-        if not validate_symbol(symbol):
-            self.signal_log.emit(f"Invalid symbol: {symbol}", "ERROR")
+        available_symbol = self.find_available_gold_symbol(symbol)
+        
+        if not available_symbol:
+            self.signal_log.emit("No XAUUSD symbols available", "ERROR")
             return False
         
+        # Update config with available symbol if different
+        if available_symbol != symbol:
+            self.config['symbol'] = available_symbol
+            self.signal_log.emit(f"Using available symbol: {available_symbol}", "INFO")
+        
         self.is_running = True
-        self.signal_log.emit(f"Bot started for {symbol}", "INFO")
+        self.signal_log.emit(f"Bot started for {available_symbol}", "INFO")
         self.signal_status.emit("Running")
         
         # Start market data timer (update every second)
