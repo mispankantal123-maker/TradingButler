@@ -1,0 +1,97 @@
+Kamu adalah asisten coding Python untuk melengkapi bot scalping MT5 di Windows.
+Saya sudah punya GUI PySide6 yang rapi (Dashboard, Strategy, Risk Management, Execution, Logs),
+tetapi masih banyak fungsi yang belum aktif. Lengkapilah bot ini dengan fitur-fitur berikut:
+
+===========================================
+1. Integrasi Data Live MT5
+===========================================
+- Gunakan library resmi MetaTrader5 Python API.
+- Pada Dashboard:
+  - Update Bid, Ask, Spread (points) secara realtime (minimal setiap 500ms).
+  - Update Balance, Equity, Margin, PnL dari akun MT5 live.
+  - Update Time (server time).
+- Pada tab Strategy:
+  - Hitung dan update EMA, RSI, ATR untuk M1 dan M5 secara realtime.
+  - Pastikan EMA/RSI/ATR menggunakan rumus benar atau fungsi MT5 (iMA, iRSI, iATR).
+  - Nilai indikator muncul di panel "Current Indicators".
+- Gunakan QThread atau worker thread agar GUI tidak freeze.
+
+===========================================
+2. Trading Signal Logic
+===========================================
+- Implementasikan 1 strategi scalping XAUUSD:
+  - Trend filter M5:
+    - BUY jika EMA9 > EMA21 dan harga > EMA50 M5.
+    - SELL jika EMA9 < EMA21 dan harga < EMA50 M5.
+  - Entry M1:
+    - Entry searah tren M5.
+    - Pullback ke EMA9/EMA21 M1 lalu close kembali searah tren.
+    - RSI re-cross 50 sebagai konfirmasi (opsional via checkbox).
+    - Hindari doji (body < 30% range).
+- Tampilkan sinyal di panel "Current Trading Signal":
+  - Signal Type: BUY/SELL/NONE
+  - Entry Price, Stop Loss, Take Profit, Lot Size, Risk:Reward
+- Tambahkan tombol “Test Signal” untuk menampilkan sinyal tanpa order (shadow mode).
+
+===========================================
+3. Order Execution
+===========================================
+- BUY di Ask, SELL di Bid.
+- Hitung SL dan TP berbasis ATR:
+  - SL = max(minSL_points, ATR_M1 × multiplier)
+  - TP = R × SL
+- Lot sizing berbasis risk% dari balance (risk per trade).
+- Kirim order ke MT5 dengan TP dan SL langsung terpasang.
+- Cek hasil order dan log sukses/gagal di tab Logs.
+- Tambahkan retry logic jika requote atau order gagal.
+
+===========================================
+4. Risk Management Real-Time
+===========================================
+- Daily Loss Limit % (stop bot jika tercapai).
+- Max Trades per Day.
+- Max Consecutive Losses (cooldown jika tercapai).
+- Spread filter: skip entry jika spread > max_spread_points.
+- Session filter: hanya trading di jam London open dan NY overlap.
+- Status filter (spread OK / session OK) tampil di dashboard.
+
+===========================================
+5. Open Positions Panel
+===========================================
+- Tampilkan semua posisi terbuka (Ticket, Type, Volume, Entry, SL, TP, Profit, Comment).
+- Update setiap 1 detik.
+- Tambahkan tombol “Close All Positions” (emergency stop) yang langsung menutup semua order aktif.
+
+===========================================
+6. Logging & Export
+===========================================
+- Semua event penting (signal muncul, order open/close, SL hit, TP hit, error) tampil di tab Logs.
+- Simpan log ke file CSV otomatis: kolom (time, signal_type, entry, SL, TP, lot, result, PnL, spread, ATR).
+- Tambahkan tombol "Export Logs" di tab Logs.
+
+===========================================
+7. Shadow Mode
+===========================================
+- Jika shadow mode aktif:
+  - Semua kalkulasi sinyal tetap jalan.
+  - Tidak mengirim order ke MT5.
+  - Tetap log sinyal dan kalkulasi TP/SL.
+
+===========================================
+8. Teknis & Performa
+===========================================
+- Gunakan pathlib untuk path (cross-platform, tapi fokus Windows).
+- Jangan pakai fungsi blocking di thread GUI.
+- Semua koneksi/eksekusi MT5 di thread terpisah (QThread).
+- Pastikan kompatibel di Windows 10/11 dengan Python 3.10+.
+- Tidak ada dummy order atau dummy data: langsung konek ke akun MT5 real/demo sesuai login user.
+- Tangani error koneksi, invalid params, requote, atau symbol tidak tersedia.
+
+===========================================
+Output yang Diharapkan:
+===========================================
+- Kode lengkap yang memuat semua perbaikan di atas.
+- Semua fungsi GUI aktif (indikator live, signal live, eksekusi order, risk control).
+- Siap dijalankan di Windows:
+pip install -r requirements.txt
+python main.py
