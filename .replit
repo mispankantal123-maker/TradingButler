@@ -7,7 +7,7 @@ channel = "stable-25_05"
 packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
 
 [workflows]
-runButton = "MT5 Real Trading Bot"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "Project"
@@ -27,7 +27,7 @@ outputType = "vnc"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py"
+args = "python complete_scalping_bot.py"
 
 [[workflows.workflow]]
 name = "MT5 Real Trading Bot"

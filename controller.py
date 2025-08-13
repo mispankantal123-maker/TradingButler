@@ -4,7 +4,13 @@ MT5 Bot Controller - PRODUCTION READY for Windows Real Trading
 Handles MT5 connection, trading logic, and market data processing
 """
 
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+    DEMO_MODE = False
+except ImportError:
+    # Fallback for development environment only
+    import mock_mt5 as mt5
+    DEMO_MODE = True
 import numpy as np
 import pandas as pd
 from datetime import datetime, time

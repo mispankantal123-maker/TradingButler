@@ -4,7 +4,10 @@ Utility Functions
 Helper functions for trading operations, risk management, and system utilities
 """
 
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+except ImportError:
+    import mock_mt5 as mt5
 import numpy as np
 from datetime import datetime, time
 from typing import Optional, Tuple
