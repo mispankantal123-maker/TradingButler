@@ -1,0 +1,83 @@
+Kamu adalah asisten coding Python untuk membuat bot trading MetaTrader 5 (MT5) di Windows. 
+Saya mau kamu membuat bot dari NOL, bukan modifikasi bot lama, dengan syarat berikut:
+
+📌 Tujuan Utama:
+- Bot scalping otomatis untuk XAUUSD (bisa pilih XAUUSD, XAUUSDm, atau XAUUSDC sesuai broker).
+- Fokus hanya pada 1 strategi & 1 simbol (tidak multi-strategy).
+- Presisi order (BUY di Ask, SELL di Bid) dengan TP/SL R-multiple berbasis ATR.
+- Profitable & bisa jalan di live trading, bukan dummy atau demo.
+- Kompatibel 100% Windows, langsung connect ke MT5 Python API resmi.
+- GUI modern & rapi pakai PySide6, tidak norak/berantakan.
+
+📌 Struktur Proyek:
+1. **main.py** — Entry point, inisialisasi GUI & BotController.
+2. **controller.py** — BotController: 
+   - Connect/disconnect MT5
+   - Ambil tick, spread, data M1 & M5
+   - Hitung indikator (EMA, RSI, ATR) akurat
+   - Strategy logic: M5 trend filter + M1 pullback continuation
+   - Risk management: lot by risk%, daily loss limit, max trades/day
+   - Eksekusi order BUY/SELL + TP/SL langsung
+   - Kirim sinyal ke GUI
+3. **gui.py** — GUI PySide6:
+   - Tab: Dashboard, Strategy, Risk, Execution, Logs
+   - Control panel (connect/login, start/stop)
+   - Signal preview (no-order)
+   - Equity, PnL, spread live update
+4. **indicators.py** — Fungsi EMA, RSI, ATR (gunakan rumus benar atau iMA MT5)
+5. **utils.py** — Helper: lot sizing, spread check, time/session filter
+6. **requirements.txt** — Minimal:
+   - MetaTrader5
+   - PySide6
+   - pandas
+   - numpy
+
+📌 Spesifikasi Strategi:
+- **Trend Filter (M5)**: 
+  - EMA50 sebagai baseline tren
+  - EMA9 > EMA21 (bullish), EMA9 < EMA21 (bearish)
+- **Entry (M1)**:
+  - Hanya entry searah tren M5
+  - Pullback ke EMA9/EMA21 lalu close kembali searah tren
+  - RSI re-cross 50 sebagai konfirmasi (opsional)
+  - Hindari doji (body < 30% range candle)
+- **SL/TP**:
+  - SL = max(minSL_points, k×ATR_M1)
+  - TP = R × SL (contoh 1.5R)
+  - Breakeven di 1R (opsional), trailing setelah 1R (opsional)
+- **Risk Management**:
+  - Risk % per trade (0.5% default)
+  - Max daily loss %
+  - Max trades/day
+  - Max consecutive loss sebelum cooldown
+- **Execution**:
+  - BUY di Ask, SELL di Bid
+  - Spread cap (misal ≤ 50 points)
+  - Deviation dinamis (based on volatility)
+  - Retry logic jika requote
+- **Session Filter**:
+  - Hanya trading di London open & NY overlap
+
+📌 Output yang Harus Diberikan:
+1. Kode lengkap semua file (`main.py`, `controller.py`, `gui.py`, `indicators.py`, `utils.py`, `requirements.txt`)
+2. Instruksi install & run di Windows:
+pip install -r requirements.txt
+python main.py
+
+markdown
+Copy
+Edit
+3. Pastikan:
+- Tidak ada dummy order atau dummy data.
+- Langsung konek ke MT5 real account.
+- Semua TP/SL dihitung dan dikirim ke server saat order dibuat.
+- Tidak freeze saat dijalankan di Windows.
+
+📌 Catatan Penting:
+- Gunakan `pathlib` untuk file path agar aman di Windows.
+- Jangan pakai fungsi blocking di thread GUI.
+- Gunakan threading atau QThread untuk eksekusi trading.
+- Logging lengkap ke file + tampil di GUI + opsi kirim Telegram.
+- Sertakan `shadow mode` untuk test sinyal tanpa order.
+
+Buatlah seluruh kode ini dengan rapi, modular, dan langsung siap dijalankan di Windows.
