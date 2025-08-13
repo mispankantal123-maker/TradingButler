@@ -338,8 +338,8 @@ def get_telegram_config() -> dict:
         Dictionary with Telegram bot token and chat ID
     """
     return {
-        'bot_token': os.getenv('TELEGRAM_BOT_TOKEN', ''),
-        'chat_id': os.getenv('TELEGRAM_CHAT_ID', '')
+        'bot_token': os.getenv('TELEGRAM_BOT_TOKEN', '8365734234:AAH2uTaZPDD47Lnm3y_Tcr6aj3xGL-bVsgk'),
+        'chat_id': os.getenv('TELEGRAM_CHAT_ID', '5061106648')
     }
 
 def send_telegram_message(message: str) -> bool:

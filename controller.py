@@ -228,9 +228,9 @@ class BotController(QObject):
     def calculate_indicators(self, data: pd.DataFrame) -> Dict:
         """Calculate technical indicators for given data"""
         try:
-            close = data['close'].values
-            high = data['high'].values
-            low = data['low'].values
+            close = np.array(data['close'].values, dtype=np.float64)
+            high = np.array(data['high'].values, dtype=np.float64)
+            low = np.array(data['low'].values, dtype=np.float64)
             
             # EMAs
             ema9 = self.indicators.ema(close, self.config['ema_periods']['fast'])
@@ -372,7 +372,8 @@ class BotController(QObject):
         # Get symbol info for precise calculations
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
-            return None
+            self.signal_log.emit(f"Cannot get symbol info for {symbol}", "ERROR")
+            return {}
             
         # Calculate SL/TP using ATR with proper point conversion
         atr_points = atr / symbol_info.point  # Convert ATR to points
@@ -414,7 +415,8 @@ class BotController(QObject):
         # Get symbol info for precise calculations
         symbol_info = mt5.symbol_info(symbol)
         if symbol_info is None:
-            return None
+            self.signal_log.emit(f"Cannot get symbol info for {symbol}", "ERROR")
+            return {}
             
         # Calculate SL/TP using ATR with proper point conversion
         atr_points = atr / symbol_info.point  # Convert ATR to points
