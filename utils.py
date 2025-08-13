@@ -6,6 +6,7 @@ Helper functions for trading operations, risk management, and system utilities
 try:
     import MetaTrader5 as mt5
 except ImportError:
+    # Fallback for development environment only
     import mock_mt5 as mt5
 import numpy as np
 from datetime import datetime, time

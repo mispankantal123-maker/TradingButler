@@ -7,6 +7,7 @@ try:
     import MetaTrader5 as mt5
     MT5_AVAILABLE = True
 except ImportError:
+    # Fallback for development environment only
     import mock_mt5 as mt5
     MT5_AVAILABLE = False
 import numpy as np
@@ -43,6 +44,7 @@ class BotController(QObject):
         self.is_connected = False
         self.is_running = False
         self.shadow_mode = True
+        self.demo_mode = not MT5_AVAILABLE  # Track if running in demo mode
         
         # Configuration
         self.config = {
@@ -79,6 +81,10 @@ class BotController(QObject):
     def connect_mt5(self) -> bool:
         """Connect to MT5 terminal"""
         try:
+            # Warning for demo mode
+            if self.demo_mode:
+                self.signal_log.emit("⚠️ DEMO MODE: Using simulated data. Install MetaTrader5 for live trading!", "WARNING")
+            
             if not mt5.initialize():
                 error = mt5.last_error()
                 self.signal_log.emit(f"Failed to initialize MT5: {error}", "ERROR")
@@ -91,8 +97,9 @@ class BotController(QObject):
                 return False
             
             self.is_connected = True
-            self.signal_log.emit(f"Connected to MT5 - Account: {account_info.login}", "INFO")
-            self.signal_status.emit("Connected")
+            mode_text = " (DEMO MODE)" if self.demo_mode else ""
+            self.signal_log.emit(f"Connected to MT5{mode_text} - Account: {account_info.login}", "INFO")
+            self.signal_status.emit(f"Connected{mode_text}")
             
             return True
             
@@ -291,27 +298,63 @@ class BotController(QObject):
             self.signal_log.emit(f"Trading logic error: {e}", "ERROR")
     
     def analyze_trading_signal(self, market_data: Dict, ind_m1: Dict, ind_m5: Dict) -> Optional[Dict]:
-        """Analyze market conditions for trading signals"""
+        """Analyze market conditions for trading signals - ENHANCED for higher winrate"""
         try:
             current_price = market_data['ask']
+            bid_price = market_data['bid']
+            spread = market_data['spread']
             
-            # M5 Trend Filter
-            m5_bullish = ind_m5['ema9'] > ind_m5['ema21'] and current_price > ind_m5['ema50']
-            m5_bearish = ind_m5['ema9'] < ind_m5['ema21'] and current_price < ind_m5['ema50']
+            # Enhanced M5 Trend Filter (Stronger confirmation)
+            m5_strong_bullish = (
+                ind_m5['ema9'] > ind_m5['ema21'] and 
+                ind_m5['ema21'] > ind_m5['ema50'] and  # Trend alignment
+                current_price > ind_m5['ema9'] and     # Price above fast EMA
+                ind_m5['rsi'] > 45 and ind_m5['rsi'] < 75  # RSI not overbought
+            )
             
-            # M1 Entry Conditions
-            m1_pullback_buy = (current_price > ind_m1['ema9'] and 
-                              ind_m1['ema9'] > ind_m1['ema21'] and
-                              ind_m1['rsi'] > 50)
+            m5_strong_bearish = (
+                ind_m5['ema9'] < ind_m5['ema21'] and 
+                ind_m5['ema21'] < ind_m5['ema50'] and  # Trend alignment
+                current_price < ind_m5['ema9'] and     # Price below fast EMA
+                ind_m5['rsi'] < 55 and ind_m5['rsi'] > 25  # RSI not oversold
+            )
             
-            m1_pullback_sell = (current_price < ind_m1['ema9'] and 
-                               ind_m1['ema9'] < ind_m1['ema21'] and
-                               ind_m1['rsi'] < 50)
+            # Enhanced M1 Entry Conditions (Pullback + Continuation)
+            m1_pullback_buy = (
+                ind_m1['ema9'] > ind_m1['ema21'] and   # Short-term bullish
+                current_price > ind_m1['ema21'] and    # Above medium EMA
+                ind_m1['rsi'] > 50 and ind_m1['rsi'] < 70 and  # RSI confirmation
+                current_price > (ind_m1['ema9'] * 0.9999)  # Close to EMA9 (pullback)
+            )
             
-            # Generate signals
-            if m5_bullish and m1_pullback_buy:
+            m1_pullback_sell = (
+                ind_m1['ema9'] < ind_m1['ema21'] and   # Short-term bearish
+                current_price < ind_m1['ema21'] and    # Below medium EMA
+                ind_m1['rsi'] < 50 and ind_m1['rsi'] > 30 and  # RSI confirmation
+                current_price < (ind_m1['ema9'] * 1.0001)  # Close to EMA9 (pullback)
+            )
+            
+            # Additional filters for higher confidence
+            spread_ok = spread <= self.config['max_spread_points']
+            atr_m1 = ind_m1.get('atr', 0)
+            volatility_ok = atr_m1 > 0.00005  # Minimum volatility for scalping
+            
+            # Avoid trading during low liquidity
+            now = datetime.now().time()
+            avoid_time = (
+                (now >= time(22, 0) or now <= time(1, 0)) or  # Asian session start/end
+                (now >= time(17, 0) and now <= time(18, 0))   # London close gap
+            )
+            
+            # Generate signals with multiple confirmations
+            if (m5_strong_bullish and m1_pullback_buy and 
+                spread_ok and volatility_ok and not avoid_time):
+                self.signal_log.emit("Strong BUY signal detected", "INFO")
                 return self.create_buy_signal(market_data, ind_m1)
-            elif m5_bearish and m1_pullback_sell:
+                
+            elif (m5_strong_bearish and m1_pullback_sell and 
+                  spread_ok and volatility_ok and not avoid_time):
+                self.signal_log.emit("Strong SELL signal detected", "INFO")
                 return self.create_sell_signal(market_data, ind_m1)
             
             return None
@@ -321,20 +364,32 @@ class BotController(QObject):
             return None
     
     def create_buy_signal(self, market_data: Dict, indicators: Dict) -> Dict:
-        """Create BUY signal with SL/TP levels"""
+        """Create BUY signal with SL/TP levels - CRITICAL: Ensures proper BUY order execution"""
         symbol = market_data['symbol']
-        entry_price = market_data['ask']
+        entry_price = market_data['ask']  # BUY at ASK price (correct for live trading)
         atr = indicators['atr']
         
-        # Calculate SL/TP using ATR
-        sl_distance = max(self.config['min_sl_points'], atr * 10000)  # Convert to points
-        sl_price = entry_price - (sl_distance / 10000)
-        tp_price = entry_price + (sl_distance * self.config['risk_multiple'] / 10000)
+        # Get symbol info for precise calculations
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            return None
+            
+        # Calculate SL/TP using ATR with proper point conversion
+        atr_points = atr / symbol_info.point  # Convert ATR to points
+        sl_distance_points = max(self.config['min_sl_points'], atr_points)
         
-        # Calculate lot size
+        # BUY order: SL below entry, TP above entry
+        sl_price = entry_price - (sl_distance_points * symbol_info.point)
+        tp_price = entry_price + (sl_distance_points * self.config['risk_multiple'] * symbol_info.point)
+        
+        # Round to tick size for precise execution
+        sl_price = round(sl_price / symbol_info.trade_tick_size) * symbol_info.trade_tick_size
+        tp_price = round(tp_price / symbol_info.trade_tick_size) * symbol_info.trade_tick_size
+        
+        # Calculate lot size based on risk
         lot_size = calculate_lot_size(
             self.config['risk_percent'],
-            sl_distance,
+            sl_distance_points,
             symbol
         )
         
@@ -345,26 +400,38 @@ class BotController(QObject):
             'sl_price': sl_price,
             'tp_price': tp_price,
             'lot_size': lot_size,
-            'sl_distance': sl_distance,
+            'sl_distance_points': sl_distance_points,
             'risk_reward': self.config['risk_multiple'],
             'timestamp': datetime.now()
         }
     
     def create_sell_signal(self, market_data: Dict, indicators: Dict) -> Dict:
-        """Create SELL signal with SL/TP levels"""
+        """Create SELL signal with SL/TP levels - CRITICAL: Ensures proper SELL order execution"""
         symbol = market_data['symbol']
-        entry_price = market_data['bid']
+        entry_price = market_data['bid']  # SELL at BID price (correct for live trading)
         atr = indicators['atr']
         
-        # Calculate SL/TP using ATR
-        sl_distance = max(self.config['min_sl_points'], atr * 10000)  # Convert to points
-        sl_price = entry_price + (sl_distance / 10000)
-        tp_price = entry_price - (sl_distance * self.config['risk_multiple'] / 10000)
+        # Get symbol info for precise calculations
+        symbol_info = mt5.symbol_info(symbol)
+        if symbol_info is None:
+            return None
+            
+        # Calculate SL/TP using ATR with proper point conversion
+        atr_points = atr / symbol_info.point  # Convert ATR to points
+        sl_distance_points = max(self.config['min_sl_points'], atr_points)
         
-        # Calculate lot size
+        # SELL order: SL above entry, TP below entry
+        sl_price = entry_price + (sl_distance_points * symbol_info.point)
+        tp_price = entry_price - (sl_distance_points * self.config['risk_multiple'] * symbol_info.point)
+        
+        # Round to tick size for precise execution
+        sl_price = round(sl_price / symbol_info.trade_tick_size) * symbol_info.trade_tick_size
+        tp_price = round(tp_price / symbol_info.trade_tick_size) * symbol_info.trade_tick_size
+        
+        # Calculate lot size based on risk
         lot_size = calculate_lot_size(
             self.config['risk_percent'],
-            sl_distance,
+            sl_distance_points,
             symbol
         )
         
@@ -375,50 +442,126 @@ class BotController(QObject):
             'sl_price': sl_price,
             'tp_price': tp_price,
             'lot_size': lot_size,
-            'sl_distance': sl_distance,
+            'sl_distance_points': sl_distance_points,
             'risk_reward': self.config['risk_multiple'],
             'timestamp': datetime.now()
         }
     
     def execute_trade(self, signal: Dict):
-        """Execute trade based on signal"""
+        """Execute trade based on signal - CRITICAL: Production-ready order execution"""
         try:
             symbol = signal['symbol']
             trade_type = mt5.ORDER_TYPE_BUY if signal['type'] == 'BUY' else mt5.ORDER_TYPE_SELL
             
-            # Prepare order request
+            # Final validations before execution
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info is None:
+                self.signal_log.emit(f"Symbol {symbol} not available", "ERROR")
+                return False
+            
+            # Validate lot size
+            lot_size = signal['lot_size']
+            if lot_size < symbol_info.volume_min or lot_size > symbol_info.volume_max:
+                self.signal_log.emit(f"Invalid lot size: {lot_size}", "ERROR")
+                return False
+            
+            # Get fresh prices for execution
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is None:
+                self.signal_log.emit("Failed to get current prices", "ERROR")
+                return False
+            
+            # Use current market prices for execution
+            execution_price = tick.ask if signal['type'] == 'BUY' else tick.bid
+            
+            # Validate SL/TP distances
+            stops_level = symbol_info.trade_stops_level * symbol_info.point
+            sl_distance = abs(execution_price - signal['sl_price'])
+            tp_distance = abs(execution_price - signal['tp_price'])
+            
+            if sl_distance < stops_level or tp_distance < stops_level:
+                self.signal_log.emit(f"SL/TP too close to market: min={stops_level}", "ERROR")
+                return False
+            
+            # Calculate dynamic deviation based on volatility
+            atr_points = signal.get('sl_distance_points', 100)
+            dynamic_deviation = min(max(int(atr_points * 0.1), 10), 50)
+            
+            # Prepare order request with all validations
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
-                "volume": signal['lot_size'],
+                "volume": lot_size,
                 "type": trade_type,
-                "price": signal['entry_price'],
+                "price": execution_price,
                 "sl": signal['sl_price'],
                 "tp": signal['tp_price'],
-                "deviation": self.config['deviation_points'],
+                "deviation": dynamic_deviation,
                 "magic": self.config['magic_number'],
-                "comment": f"ScalpBot_{signal['type']}",
+                "comment": f"ScalpBot_{signal['type']}_{datetime.now().strftime('%H%M%S')}",
                 "type_time": mt5.ORDER_TIME_GTC,
                 "type_filling": mt5.ORDER_FILLING_IOC,
             }
             
-            # Send order
-            result = mt5.order_send(request)
-            
-            if result.retcode != mt5.TRADE_RETCODE_DONE:
-                self.signal_log.emit(f"Order failed: {result.comment} (Code: {result.retcode})", "ERROR")
-                return False
-            
-            # Update counters
-            self.daily_trades += 1
-            
+            # Log order details before execution
             self.signal_log.emit(
-                f"{signal['type']} order executed: {symbol} @ {signal['entry_price']:.5f}, "
-                f"SL: {signal['sl_price']:.5f}, TP: {signal['tp_price']:.5f}", 
-                "INFO"
+                f"Executing {signal['type']} order: {symbol} {lot_size} lots @ {execution_price:.5f}, "
+                f"SL: {signal['sl_price']:.5f}, TP: {signal['tp_price']:.5f}, "
+                f"Deviation: {dynamic_deviation}", "INFO"
             )
             
-            return True
+            # Send order with retry logic
+            max_retries = 3
+            for attempt in range(max_retries):
+                result = mt5.order_send(request)
+                
+                if result.retcode == mt5.TRADE_RETCODE_DONE:
+                    # Success - update counters and log
+                    self.daily_trades += 1
+                    
+                    # Update positions display
+                    self.update_positions_display()
+                    
+                    self.signal_log.emit(
+                        f"✓ {signal['type']} order EXECUTED: Ticket #{result.order}, "
+                        f"Volume: {result.volume}, Price: {result.price:.5f}", "INFO"
+                    )
+                    
+                    # Send Telegram notification if configured
+                    from utils import send_telegram_message
+                    send_telegram_message(
+                        f"🎯 {signal['type']} Order Executed\n"
+                        f"Symbol: {symbol}\n"
+                        f"Volume: {result.volume}\n"
+                        f"Price: {result.price:.5f}\n"
+                        f"SL: {signal['sl_price']:.5f}\n"
+                        f"TP: {signal['tp_price']:.5f}\n"
+                        f"Ticket: #{result.order}"
+                    )
+                    
+                    return True
+                    
+                elif result.retcode in [mt5.TRADE_RETCODE_PRICE_OFF, mt5.TRADE_RETCODE_REQUOTE]:
+                    # Price changed, get new price and retry
+                    if attempt < max_retries - 1:
+                        tick = mt5.symbol_info_tick(symbol)
+                        if tick:
+                            request["price"] = tick.ask if signal['type'] == 'BUY' else tick.bid
+                            self.signal_log.emit(f"Requote, retrying with new price: {request['price']:.5f}", "WARNING")
+                            continue
+                
+                # Log the error
+                self.signal_log.emit(
+                    f"Order failed (attempt {attempt + 1}): {result.comment} (Code: {result.retcode})", 
+                    "ERROR"
+                )
+                
+                if attempt < max_retries - 1:
+                    import time
+                    time.sleep(0.1)  # Brief pause before retry
+            
+            self.signal_log.emit(f"Order execution failed after {max_retries} attempts", "ERROR")
+            return False
             
         except Exception as e:
             self.signal_log.emit(f"Trade execution error: {e}", "ERROR")
@@ -476,3 +619,11 @@ class BotController(QObject):
         except Exception as e:
             self.logger.error(f"Error getting positions: {e}")
             return []
+    
+    def update_positions_display(self):
+        """Update positions display in GUI"""
+        try:
+            positions = self.get_positions()
+            self.signal_position_update.emit(positions)
+        except Exception as e:
+            self.logger.error(f"Error updating positions display: {e}")

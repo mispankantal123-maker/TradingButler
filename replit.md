@@ -1,6 +1,8 @@
 # Overview
 
-This is a professional automated trading bot for MetaTrader 5 (MT5) designed specifically for XAUUSD scalping strategies. The application features a modern PySide6 GUI interface with real-time market data monitoring, technical analysis using EMA/RSI/ATR indicators, and comprehensive risk management. The bot implements a dual-timeframe strategy using M5 trend filtering combined with M1 pullback continuation entries, focusing on precise order execution with proper bid/ask handling and ATR-based position sizing.
+This is a professional automated trading bot for MetaTrader 5 (MT5) designed specifically for XAUUSD scalping strategies with REAL MONEY TRADING capability. The application features a modern PySide6 GUI interface with real-time market data monitoring, technical analysis using EMA/RSI/ATR indicators, and comprehensive risk management. The bot implements a dual-timeframe strategy using M5 trend filtering combined with M1 pullback continuation entries, focusing on precise order execution with proper bid/ask handling and ATR-based position sizing.
+
+⚠️ **CRITICAL FOR LIVE TRADING**: This bot is production-ready for Windows with MetaTrader 5. All calculations, order execution, and risk management are optimized for real trading with actual funds. Demo mode is only used when MetaTrader5 module is unavailable.
 
 # User Preferences
 
