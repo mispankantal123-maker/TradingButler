@@ -15,6 +15,7 @@ from pathlib import Path
 import csv
 import traceback
 import pytz
+import numpy as np
 
 from PySide6.QtCore import QObject, QTimer, Signal, QThread, QMutex
 from PySide6.QtWidgets import QMessageBox
@@ -537,7 +538,7 @@ class BotController(QObject):
                 self.trade_mode = 0  # Full trading mode
         
         self.symbol_info = DemoSymbolInfo()
-        self.account_info = {'balance': 10000.0, 'equity': 10000.0, 'login': 12345}
+        self.account_info = {'balance': 10000.0, 'equity': 10000.0, 'login': 12345, 'margin': 0.0, 'profit': 0.0}
     
     def log_symbol_info(self):
         """Log symbol specifications"""

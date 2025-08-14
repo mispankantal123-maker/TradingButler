@@ -1,0 +1,115 @@
+Kamu adalah developer Python yang harus melakukan ANALISA PERBAIKAN MENYELURUH terhadap bot scalping MT5 berbasis PySide6 di Windows.
+
+Tujuan: pastikan bot bisa berjalan lancar di Windows 10/11, langsung connect ke MT5, melakukan analisa otomatis, mengeksekusi order otomatis sesuai strategi, dan menghormati semua risk management & logic yang sudah ditentukan sebelumnya.
+
+========================================================
+A. MASALAH YANG WAJIB DICARI & DIPERBAIKI
+========================================================
+1) Error startup GUI (contoh: UnicodeEncodeError pada logging, AttributeError QTextEdit.setMaximumBlockCount) — PERBAIKI supaya startup 100% tanpa error di Windows.
+2) Bot tidak melakukan analisa walau tombol Start ditekan (Log kosong).
+3) Bot tidak mengeksekusi order otomatis walau kondisi strategi terpenuhi.
+4) Input TP/SL user belum terintegrasi (ATR, Points, Pips, Persentase Balance).
+5) Spread filter, session filter, dan risk control belum aktif atau selalu false.
+6) Indikator (EMA, RSI, ATR) belum dihitung akurat atau tidak update real-time.
+7) Thread worker tidak berjalan stabil, GUI freeze atau tidak menerima update.
+8) Log tidak konsisten / tidak menampilkan event penting.
+
+========================================================
+B. HAL YANG WAJIB DIPASTIKAN BERJALAN
+========================================================
+1) **Kompatibilitas Windows**
+   - Gunakan pathlib untuk path file.
+   - Tangani encoding console (UTF-8) agar emoji/log tidak error.
+   - Jangan gunakan fungsi blocking di thread GUI.
+   - Semua koneksi & eksekusi MT5 berjalan di QThread atau worker terpisah.
+
+2) **Koneksi MT5**
+   - Saat Connect, tampilkan hasil login & info akun.
+   - Saat Start, tampilkan konfirmasi strategi & simbol.
+   - Autodetect info simbol: point, digits, contract_size, tick_value, spread.
+
+3) **Data & Indikator Live**
+   - Ambil tick (Bid, Ask, Spread) tiap 250–500ms.
+   - Ambil bar M1 & M5 minimal 200 candle terakhir.
+   - Hitung indikator akurat:
+     - EMA (recursive atau iMA MT5)
+     - RSI Wilder (EMA gains/losses atau iRSI MT5)
+     - ATR (True Range atau iATR MT5)
+   - Kirim update ke GUI: indikator, spread, ATR points.
+
+4) **Strategi (1 strategi, 1 simbol default XAUUSD)**
+   - Trend filter M5: EMA9>EMA21 & price>EMA50 (BUY), EMA9<EMA21 & price<EMA50 (SELL)
+   - Entry M1 pullback continuation + opsi RSI re-cross 50 + anti-doji.
+   - Spread filter: skip entry jika spread > max_spread_points.
+   - Session filter: hanya trading London open & NY overlap.
+   - Evaluasi sinyal per bar close M1 (hindari double-entry).
+   - LOG DETAIL setiap sinyal.
+
+5) **TP/SL Modes**
+   - ATR mode: SL = max(minSL_points, ATR×multiplier), TP = R×SL.
+   - Points mode: langsung pakai input points.
+   - Pips mode: konversi pips → points (digits 3/5 = pip×10 points).
+   - Persentase Balance:
+     ```
+     tp_usd = balance × tp_percent
+     sl_usd = balance × sl_percent
+     tp_points = tp_usd / (tick_value × lot)
+     sl_points = sl_usd / (tick_value × lot)
+     ```
+     Konversi points → harga sesuai BUY/SELL.
+
+6) **Lot Sizing & Eksekusi Order**
+   - Hitung lot dari risk% dan SL distance.
+   - BUY di Ask, SELL di Bid.
+   - Pasang order DEAL dengan TP & SL langsung.
+   - Retry jika requote/gagal.
+   - Verifikasi order sukses di log.
+
+7) **Risk Management Real-Time**
+   - Daily loss limit % → auto-stop jika tercapai.
+   - Max trades/day → stop jika tercapai.
+   - Max consecutive loss → cooldown.
+   - Emergency stop: close semua posisi & stop bot.
+
+8) **Open Positions Panel**
+   - Update setiap detik.
+   - Menampilkan ticket, type, lot, price, SL, TP, profit.
+   - Tombol “Close Selected” & “Close All”.
+
+9) **Logging**
+   - Semua event penting masuk Logs (GUI + file CSV).
+   - Log: indikator siap, sinyal, order attempt, order result, risk stop, error.
+   - Export CSV untuk analisa.
+
+10) **Shadow Mode**
+    - Jika aktif: semua analisa jalan tapi tidak ada order dikirim.
+
+========================================================
+C. LANGKAH ANALISA & PERBAIKAN
+========================================================
+1) Jalankan bot di Windows → catat semua error/exception.
+2) Periksa GUI startup: semua tab muncul, tidak ada error encoding.
+3) Tekan Connect → pastikan login sukses & info akun keluar di log.
+4) Tekan Start → dalam 2 detik harus ada:
+   - Heartbeat log (analyzer alive)
+   - Indikator pertama kali muncul
+   - Spread update
+5) Buat kondisi strategi mudah terpenuhi (untuk test) → cek sinyal muncul & order terkirim (shadow mode OFF).
+6) Uji semua mode TP/SL (ATR, Points, Pips, Balance%) → order harus sesuai perhitungan.
+7) Uji risk control (loss limit kecil) → bot harus berhenti trading saat limit tercapai.
+8) Ganti simbol → cek autodetect & warning.
+9) Cek log file → semua event penting tercatat.
+
+========================================================
+D. OUTPUT YANG HARUS DIKIRIM
+========================================================
+1) Semua file bot yang sudah diperbaiki (main.py, controller.py, gui.py, indicators.py, utils.py, dll).
+2) Daftar BUG yang ditemukan + SOLUSI per bug (bullet list).
+3) Petunjuk run di Windows:
+pip install -r requirements.txt
+python main.py
+
+pgsql
+Copy
+Edit
+4) Bot berjalan tanpa freeze, analisa otomatis aktif, order otomatis sesuai strategi, TP/SL sesuai mode, risk control akti

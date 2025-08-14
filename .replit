@@ -36,6 +36,10 @@ author = "agent"
 task = "workflow.run"
 args = "Fixed MT5 Scalping Bot"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Comprehensive Scalping Bot"
+
 [[workflows.workflow]]
 name = "Fixed MT5 Scalping Bot"
 author = "agent"
@@ -46,3 +50,15 @@ args = "python fixed_main.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow]]
+name = "Comprehensive Scalping Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python comprehensive_scalping_bot.py"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
