@@ -474,6 +474,24 @@ class MainWindow(QMainWindow):
             execution = QWidget()
             layout = QVBoxLayout(execution)
             
+            # Analysis status display - NEW
+            analysis_group = QGroupBox("🔍 Market Analysis Status")
+            analysis_layout = QFormLayout(analysis_group)
+            
+            self.analysis_status_label = QLabel("⏸️ Idle")
+            self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
+            
+            self.trend_m5_label = QLabel("N/A")
+            self.trend_m1_label = QLabel("N/A") 
+            self.signal_strength_label = QLabel("N/A")
+            self.next_analysis_label = QLabel("N/A")
+            
+            analysis_layout.addRow("📊 Analysis Status:", self.analysis_status_label)
+            analysis_layout.addRow("📈 M5 Trend:", self.trend_m5_label)
+            analysis_layout.addRow("⚡ M1 Setup:", self.trend_m1_label)
+            analysis_layout.addRow("💪 Signal Strength:", self.signal_strength_label)
+            analysis_layout.addRow("⏰ Next Analysis:", self.next_analysis_label)
+            
             # Current signal display
             signal_group = QGroupBox("🎯 Current Trading Signal")
             signal_layout = QFormLayout(signal_group)
@@ -485,6 +503,10 @@ class MainWindow(QMainWindow):
             self.signal_lot_label = QLabel("N/A")
             self.signal_risk_label = QLabel("N/A")
             self.signal_time_label = QLabel("N/A")
+            
+            # Auto trading status
+            self.auto_trade_status_label = QLabel("⏸️ Manual Mode")
+            self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: orange; }")
             
             # Style signal labels
             signal_labels = [
@@ -502,6 +524,7 @@ class MainWindow(QMainWindow):
             signal_layout.addRow("📊 Lot Size:", self.signal_lot_label)
             signal_layout.addRow("📈 Risk/Reward:", self.signal_risk_label)
             signal_layout.addRow("🕐 Signal Time:", self.signal_time_label)
+            signal_layout.addRow("🤖 Auto Trade:", self.auto_trade_status_label)
             
             # Positions table with enhanced display
             positions_group = QGroupBox("📋 Open Positions Monitor")
@@ -534,6 +557,7 @@ class MainWindow(QMainWindow):
             
             positions_layout.addLayout(position_controls)
             
+            layout.addWidget(analysis_group)
             layout.addWidget(signal_group)
             layout.addWidget(positions_group)
             
@@ -688,6 +712,8 @@ class MainWindow(QMainWindow):
                 self.controller.signal_account_update.connect(self.update_account_display)
             if hasattr(self.controller, 'signal_indicators_update'):
                 self.controller.signal_indicators_update.connect(self.update_indicators_display)
+            if hasattr(self.controller, 'signal_analysis_update'):
+                self.controller.signal_analysis_update.connect(self.update_analysis_status)
                 
         except Exception as e:
             print(f"Signal connection error: {e}")
@@ -751,7 +777,7 @@ class MainWindow(QMainWindow):
             self.log_message(f"TP/SL mode change error: {e}", "ERROR")
     
     def on_apply_tp_sl_settings(self):
-        """Apply TP/SL settings to controller"""
+        """Apply TP/SL settings to controller with immediate effect"""
         try:
             mode = self.tp_sl_mode_combo.currentText()
             
@@ -771,8 +797,20 @@ class MainWindow(QMainWindow):
                 config_update['tp_percent'] = self.tp_percent_spin.value()
                 config_update['sl_percent'] = self.sl_percent_spin.value()
             
+            # Update risk management settings too
+            config_update.update({
+                'risk_percent': self.risk_percent_spin.value(),
+                'max_daily_loss': self.max_daily_loss_spin.value(),
+                'max_trades_per_day': self.max_trades_spin.value(),
+                'max_spread_points': self.max_spread_spin.value(),
+                'min_sl_points': self.min_sl_spin.value(),
+                'risk_multiple': self.risk_multiple_spin.value()
+            })
+            
+            # Apply configuration immediately
             self.controller.update_config(config_update)
-            self.log_message(f"TP/SL settings applied: {mode} mode", "INFO")
+            self.log_message(f"✅ TP/SL and Risk settings applied successfully: {mode} mode", "INFO")
+            self.log_message(f"Risk: {self.risk_percent_spin.value()}%, SL Mode: {mode}", "INFO")
             
         except Exception as e:
             self.log_message(f"TP/SL settings apply error: {e}", "ERROR")
@@ -1135,10 +1173,45 @@ class MainWindow(QMainWindow):
             print(f"Indicators update error: {e}")
     
     @Slot(dict)
+    def update_analysis_status(self, analysis: Dict):
+        """Update analysis status display"""
+        try:
+            status = analysis.get('status', 'idle')
+            if status == 'analyzing':
+                self.analysis_status_label.setText("🔍 Analyzing Market...")
+                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: blue; }")
+            elif status == 'signal_found':
+                self.analysis_status_label.setText("✅ Signal Detected")
+                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: green; }")
+            elif status == 'no_signal':
+                self.analysis_status_label.setText("⏳ Waiting for Setup")
+                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: orange; }")
+            else:
+                self.analysis_status_label.setText("⏸️ Idle")
+                self.analysis_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
+            
+            # Update trend analysis
+            m5_trend = analysis.get('m5_trend', 'N/A')
+            m1_setup = analysis.get('m1_setup', 'N/A')
+            strength = analysis.get('signal_strength', 'N/A')
+            
+            self.trend_m5_label.setText(m5_trend)
+            self.trend_m1_label.setText(m1_setup)
+            self.signal_strength_label.setText(f"{strength}/10" if isinstance(strength, (int, float)) else strength)
+            
+            # Update next analysis time
+            if 'next_analysis' in analysis:
+                self.next_analysis_label.setText(analysis['next_analysis'])
+                
+        except Exception as e:
+            print(f"Analysis status update error: {e}")
+    
+    @Slot(dict)
     def update_trade_signal(self, signal: Dict):
         """Update trade signal display with error handling"""
         try:
-            self.signal_type_label.setText(signal.get('type', 'None'))
+            signal_type = signal.get('type', 'None')
+            self.signal_type_label.setText(signal_type)
             self.signal_entry_label.setText(f"{signal.get('entry_price', 0):.5f}")
             self.signal_sl_label.setText(f"{signal.get('sl_price', 0):.5f}")
             self.signal_tp_label.setText(f"{signal.get('tp_price', 0):.5f}")
@@ -1147,6 +1220,17 @@ class MainWindow(QMainWindow):
             
             if 'timestamp' in signal:
                 self.signal_time_label.setText(signal['timestamp'].strftime("%H:%M:%S"))
+            
+            # Update auto trade status
+            if not self.shadow_mode_cb.isChecked() and signal_type != 'None':
+                self.auto_trade_status_label.setText("🚀 AUTO ORDER READY")
+                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: green; }")
+            elif self.shadow_mode_cb.isChecked() and signal_type != 'None':
+                self.auto_trade_status_label.setText("🛡️ SHADOW - Signal Only")
+                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: blue; }")
+            else:
+                self.auto_trade_status_label.setText("⏸️ No Signal")
+                self.auto_trade_status_label.setStyleSheet("QLabel { font-weight: bold; color: gray; }")
             
         except Exception as e:
             print(f"Signal update error: {e}")

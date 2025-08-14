@@ -65,6 +65,7 @@ class BotController(QObject):
     signal_position_update = Signal(list)  # positions list
     signal_account_update = Signal(dict)  # account info
     signal_indicators_update = Signal(dict)  # indicators update
+    signal_analysis_update = Signal(dict)  # analysis status update
     
     def __init__(self):
         super().__init__()
@@ -393,9 +394,15 @@ class BotController(QObject):
                     self.current_signal = signal
                     self.signal_trade_signal.emit(signal)
                     
-                    # Execute trade if not in shadow mode
+                    # Log signal generation
+                    self.log_message(f"🎯 SIGNAL GENERATED: {signal['type']} at {signal['entry_price']:.5f}", "INFO")
+                    
+                    # Execute trade automatically if not in shadow mode
                     if not self.shadow_mode:
-                        self.execute_signal(signal)
+                        self.log_message("🚀 AUTO EXECUTION STARTED", "INFO")
+                        QTimer.singleShot(1000, lambda: self.execute_signal(signal))  # Small delay for GUI update
+                    else:
+                        self.log_message("🛡️ Shadow mode - Signal only", "INFO")
             
         except Exception as e:
             self.log_message(f"Market data processing error: {e}", "ERROR")
@@ -416,7 +423,19 @@ class BotController(QObject):
     def generate_signal(self, data: Dict) -> Optional[Dict]:
         """Generate scalping signals using M5 trend + M1 pullback strategy"""
         try:
+            # Emit analysis start status
+            self.signal_analysis_update.emit({
+                'status': 'analyzing',
+                'next_analysis': datetime.now().strftime("%H:%M:%S")
+            })
+            
             if not data.get('indicators_m1') or not data.get('indicators_m5'):
+                self.signal_analysis_update.emit({
+                    'status': 'no_signal',
+                    'm5_trend': 'No Data',
+                    'm1_setup': 'No Data',
+                    'signal_strength': 0
+                })
                 return None
             
             m1_indicators = data['indicators_m1']
@@ -424,6 +443,12 @@ class BotController(QObject):
             
             # Check spread filter
             if data.get('spread', 0) > self.config['max_spread_points']:
+                self.signal_analysis_update.emit({
+                    'status': 'no_signal',
+                    'm5_trend': 'High Spread',
+                    'm1_setup': f"Spread: {data.get('spread', 0)} pts",
+                    'signal_strength': 0
+                })
                 return None
             
             # Get indicator values with safe access
@@ -465,16 +490,50 @@ class BotController(QObject):
             
             signal_type = None
             entry_price = None
+            signal_strength = 0
+            
+            # Calculate signal strength
+            strength_factors = 0
+            if m5_bullish_trend or m5_bearish_trend:
+                strength_factors += 3
+            if m1_bullish_setup or m1_bearish_setup:
+                strength_factors += 3
+            if near_m1_ema:
+                strength_factors += 2
+            if 35 < m1_rsi < 65:  # RSI in good range
+                strength_factors += 2
+                
+            signal_strength = strength_factors
+            
+            # Determine trend status for display
+            m5_trend_status = "📈 Bullish" if m5_bullish_trend else "📉 Bearish" if m5_bearish_trend else "➡️ Sideways"
+            m1_setup_status = "✅ Long Setup" if m1_bullish_setup else "✅ Short Setup" if m1_bearish_setup else "❌ No Setup"
             
             # Generate BUY signal
-            if m5_bullish_trend and m1_bullish_setup and near_m1_ema:
+            if m5_bullish_trend and m1_bullish_setup and near_m1_ema and signal_strength >= 7:
                 signal_type = "BUY"
                 entry_price = data['ask']  # Buy at ask price
                 
             # Generate SELL signal
-            elif m5_bearish_trend and m1_bearish_setup and near_m1_ema:
+            elif m5_bearish_trend and m1_bearish_setup and near_m1_ema and signal_strength >= 7:
                 signal_type = "SELL" 
                 entry_price = data['bid']  # Sell at bid price
+            
+            # Update analysis status
+            if signal_type:
+                self.signal_analysis_update.emit({
+                    'status': 'signal_found',
+                    'm5_trend': m5_trend_status,
+                    'm1_setup': m1_setup_status,
+                    'signal_strength': signal_strength
+                })
+            else:
+                self.signal_analysis_update.emit({
+                    'status': 'no_signal',
+                    'm5_trend': m5_trend_status,
+                    'm1_setup': m1_setup_status,
+                    'signal_strength': signal_strength
+                })
             
             if signal_type:
                 # Calculate SL/TP based on selected mode
@@ -590,12 +649,27 @@ class BotController(QObject):
         """Execute trading signal with real MT5 orders"""
         try:
             if self.shadow_mode:
-                self.log_message(f"SHADOW: {signal['type']} signal at {signal['entry_price']:.5f}", "INFO")
+                self.log_message(f"🛡️ SHADOW MODE: {signal['type']} signal at {signal['entry_price']:.5f}", "INFO")
+                self.log_message(f"🛡️ SHADOW: SL={signal['sl_price']:.5f}, TP={signal['tp_price']:.5f}, Lot={signal['lot_size']}", "INFO")
                 return
             
             if not MT5_AVAILABLE or not self.is_connected:
-                self.log_message("Cannot execute - MT5 not available or not connected", "ERROR")
+                self.log_message("❌ Cannot execute - MT5 not available or not connected", "ERROR")
                 return
+            
+            # Check daily limits
+            if self.daily_trades >= self.config['max_trades_per_day']:
+                self.log_message(f"❌ Daily trade limit reached ({self.daily_trades}/{self.config['max_trades_per_day']})", "WARNING")
+                return
+            
+            # Validate account balance for risk
+            if not self.account_info:
+                self.log_message("❌ Cannot execute - No account information", "ERROR")
+                return
+            
+            risk_amount = self.account_info.balance * (self.config['risk_percent'] / 100)
+            self.log_message(f"🎯 EXECUTING LIVE ORDER: {signal['type']}", "INFO")
+            self.log_message(f"💰 Risk Amount: ${risk_amount:.2f} ({self.config['risk_percent']}%)", "INFO")
             
             symbol = self.config['symbol']
             
@@ -768,13 +842,34 @@ class BotController(QObject):
             self.log_message(f"Shadow mode toggle error: {e}", "ERROR")
     
     def update_config(self, config: Dict):
-        """Update bot configuration"""
+        """Update bot configuration with validation"""
         try:
+            old_config = self.config.copy()
             self.config.update(config)
-            self.log_message("Configuration updated", "INFO")
+            
+            # Log important configuration changes
+            if 'tp_sl_mode' in config:
+                self.log_message(f"✅ TP/SL Mode changed to: {config['tp_sl_mode']}", "INFO")
+            
+            if 'risk_percent' in config:
+                self.log_message(f"✅ Risk per trade: {config['risk_percent']}%", "INFO")
+                
+            if 'symbol' in config:
+                self.log_message(f"✅ Symbol changed to: {config['symbol']}", "INFO")
+            
+            self.log_message("✅ Configuration updated successfully", "INFO")
+            
+            # Validate critical parameters
+            if self.config['risk_percent'] > 5.0:
+                self.log_message("⚠️ WARNING: Risk per trade >5% - Very high risk!", "WARNING")
+            
+            if self.config['max_spread_points'] > 100:
+                self.log_message("⚠️ WARNING: Max spread >100 points - May miss opportunities", "WARNING")
             
         except Exception as e:
             self.log_message(f"Config update error: {e}", "ERROR")
+            # Restore old config on error
+            self.config = old_config
     
     def close_all_positions(self):
         """Close all open positions"""

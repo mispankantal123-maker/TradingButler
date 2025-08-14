@@ -97,7 +97,8 @@ def main():
         
         # Set application properties for better integration
         from PySide6.QtCore import Qt
-        app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+        if hasattr(Qt.ApplicationAttribute, 'AA_UseHighDpiPixmaps'):
+            app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
         
     except Exception as e:
         logger.error(f"Failed to create QApplication: {e}")
