@@ -391,10 +391,6 @@ class MainWindow(QMainWindow):
         self.controller.signal_trade_signal.connect(self.update_trade_signal)
         self.controller.signal_position_update.connect(self.update_positions)
         self.controller.signal_account_update.connect(self.update_account_display)
-        
-        # Connect indicators update if available
-        if hasattr(self.controller, 'signal_indicators_update'):
-            self.controller.signal_indicators_update.connect(self.update_indicators_display)
     
     # Event handlers
     def on_connect(self):

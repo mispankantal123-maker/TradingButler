@@ -17,6 +17,7 @@ import threading
 import logging
 from typing import Optional, Dict, List, Tuple
 import os
+from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal, QTimer, QThread
 
@@ -712,3 +713,107 @@ class BotController(QObject):
             self.signal_position_update.emit(positions)
         except Exception as e:
             self.logger.error(f"Error updating positions: {e}")
+    
+    def close_all_positions(self):
+        """Close all open positions for the current symbol"""
+        try:
+            positions = mt5.positions_get(symbol=self.config['symbol'])
+            if positions is None or len(positions) == 0:
+                self.signal_log.emit("No positions to close", "INFO")
+                return True
+            
+            closed_count = 0
+            for position in positions:
+                # Determine close order type
+                if position.type == mt5.POSITION_TYPE_BUY:
+                    order_type = mt5.ORDER_TYPE_SELL
+                    price = mt5.symbol_info_tick(position.symbol).bid
+                else:
+                    order_type = mt5.ORDER_TYPE_BUY
+                    price = mt5.symbol_info_tick(position.symbol).ask
+                
+                # Close position
+                request = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "symbol": position.symbol,
+                    "volume": position.volume,
+                    "type": order_type,
+                    "position": position.ticket,
+                    "price": price,
+                    "deviation": 20,
+                    "magic": self.config['magic_number'],
+                    "comment": "Close all positions",
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": mt5.ORDER_FILLING_IOC,
+                }
+                
+                result = mt5.order_send(request)
+                if result.retcode == mt5.TRADE_RETCODE_DONE:
+                    closed_count += 1
+                    self.signal_log.emit(f"Closed position #{position.ticket}", "INFO")
+                else:
+                    self.signal_log.emit(f"Failed to close #{position.ticket}: {result.comment}", "ERROR")
+            
+            self.signal_log.emit(f"Closed {closed_count} positions", "INFO")
+            self.update_positions_display()
+            return True
+            
+        except Exception as e:
+            self.signal_log.emit(f"Error closing positions: {e}", "ERROR")
+            return False
+    
+    def export_logs(self) -> Optional[str]:
+        """Export trading logs to file"""
+        try:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"trading_logs_{timestamp}.txt"
+            
+            # Create logs directory if it doesn't exist
+            log_dir = Path("logs")
+            log_dir.mkdir(exist_ok=True)
+            
+            filepath = log_dir / filename
+            
+            # Read current log file and copy to export file
+            log_file = log_dir / "trading_bot.log"
+            if log_file.exists():
+                with open(log_file, 'r') as source:
+                    with open(filepath, 'w') as target:
+                        target.write(f"Trading Bot Logs Export - {datetime.now()}\n")
+                        target.write("="*50 + "\n\n")
+                        target.write(source.read())
+                
+                return str(filepath)
+            else:
+                return None
+                
+        except Exception as e:
+            self.signal_log.emit(f"Export error: {e}", "ERROR")
+            return None
+    
+    def test_signal(self):
+        """Test signal generation for debugging"""
+        try:
+            if not self.is_connected:
+                self.signal_log.emit("❌ Not connected to MT5", "ERROR")
+                return
+            
+            # Create a test signal
+            test_signal = {
+                'type': 'BUY',
+                'symbol': self.config['symbol'],
+                'entry_price': 2000.00,
+                'sl_price': 1999.50,
+                'tp_price': 2001.00,
+                'lot_size': 0.01,
+                'sl_distance_points': 50,
+                'risk_reward': 2.0,
+                'timestamp': datetime.now()
+            }
+            
+            self.signal_log.emit("🧪 Test signal generated", "INFO")
+            self.signal_trade_signal.emit(test_signal)
+            
+        except Exception as e:
+            self.signal_log.emit(f"Test signal error: {e}", "ERROR")

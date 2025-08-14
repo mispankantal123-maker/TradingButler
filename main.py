@@ -11,7 +11,7 @@ from PySide6.QtCore import QTimer
 import logging
 
 from gui import MainWindow
-from mt5_scalping_controller import ScalpingBotController
+from controller import BotController as ScalpingBotController
 
 # Setup logging
 def setup_logging():

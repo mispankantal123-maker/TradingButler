@@ -15,11 +15,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from PySide6.QtWidgets import QApplication
 
-# Import with proper fallback - use original working controller
+# Import the working controller and GUI
 from controller import BotController as ScalpingBotController
-MT5_AVAILABLE = True  # Controller handles fallback internally
-
 from gui import MainWindow
+
+# Check MT5 availability
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except ImportError:
+    MT5_AVAILABLE = False
 
 def setup_logging():
     """Configure comprehensive logging"""
