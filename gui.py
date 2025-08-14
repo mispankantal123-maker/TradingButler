@@ -388,7 +388,7 @@ class MainWindow(QMainWindow):
         self.controller.signal_log.connect(self.log_message)
         self.controller.signal_status.connect(self.update_status)
         self.controller.signal_market_data.connect(self.update_market_data)
-        self.controller.signal_trade_signal.connect(self.update_signal_display)
+        self.controller.signal_trade_signal.connect(self.update_trade_signal)
         self.controller.signal_position_update.connect(self.update_positions)
         self.controller.signal_account_update.connect(self.update_account_display)
         
@@ -443,11 +443,6 @@ class MainWindow(QMainWindow):
         self.controller.stop_bot()
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
-    
-    def on_shadow_mode_toggle(self):
-        """Toggle shadow mode"""
-        if hasattr(self, 'shadow_mode_check'):
-            self.controller.set_shadow_mode(self.shadow_mode_check.isChecked())
     
     def on_test_signal(self):
         """Test signal generation"""
