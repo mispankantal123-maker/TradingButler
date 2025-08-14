@@ -1,0 +1,66 @@
+Kamu adalah developer Python yang akan memperbaiki bot scalping MT5 berbasis PySide6 di Windows.
+Bot sudah punya GUI, analisa, dan eksekusi order, tapi saat dijalankan muncul error berikut:
+
+1) UnicodeEncodeError pada logging:
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705'
+
+scss
+Copy
+Edit
+- Ini terjadi karena di Windows console (CP1252) tidak bisa encode emoji (✅, ❌).
+- SOLUSI: ganti log message agar tidak mengandung emoji atau set logger encoding UTF-8 yang aman di Windows.
+- Kalau ingin tetap pakai emoji, gunakan:
+  ```python
+  import sys
+  sys.stdout.reconfigure(encoding='utf-8')
+  sys.stderr.reconfigure(encoding='utf-8')
+  ```
+  Pastikan ini dilakukan sebelum logging.basicConfig().
+- Atau gunakan emoji hanya di GUI, sedangkan log file/console pakai teks biasa.
+
+2) AttributeError: QTextEdit tidak punya method setMaximumBlockCount:
+'PySide6.QtWidgets.QTextEdit' object has no attribute 'setMaximumBlockCount'
+
+markdown
+Copy
+Edit
+- Method `setMaximumBlockCount()` hanya ada di QPlainTextEdit, bukan QTextEdit.
+- SOLUSI: Ganti QTextEdit menjadi QPlainTextEdit untuk log viewer, atau hapus pemanggilan setMaximumBlockCount jika tetap ingin QTextEdit.
+- Rekomendasi: gunakan QPlainTextEdit untuk log karena performa lebih baik dan mendukung `setMaximumBlockCount()`, sehingga log tidak membengkak.
+
+3) Pastikan startup GUI tidak berhenti hanya karena tab Logs gagal dibuat.
+- Tangani semua exception pada UI setup agar error di satu tab tidak memblokir seluruh aplikasi.
+- Contoh:
+  ```python
+  try:
+      self.create_logs_tab()
+  except Exception as e:
+      logger.error(f"Logs tab creation failed: {e}")
+      # lanjutkan startup tanpa tab Logs
+  ```
+
+4) Jalankan **test startup di Windows** setelah fix:
+- Pastikan console log muncul tanpa error Unicode.
+- Pastikan Logs tab terbuka dan bisa menerima append text dari controller.
+- Pastikan tidak ada Exception yang menghentikan aplikasi.
+
+5) Saat memperbaiki, JANGAN hilangkan fitur lain:
+- Tetap konek ke MT5.
+- Tetap ada analisa dan eksekusi order otomatis.
+- Tetap ada semua tab GUI (Dashboard, Strategy, Risk, Execution, Logs).
+- Tetap ada logging ke file.
+
+6) Setelah perbaikan, kirim:
+- Semua file yang diubah.
+- Penjelasan bug dan perbaikan.
+- Petunjuk run di Windows:
+  ```
+  pip install -r requirements.txt
+  python fixed_main.py
+  ```
+
+DEFINITION OF DONE:
+- Aplikasi bisa start tanpa error.
+- Tidak ada UnicodeEncodeError di console.
+- Logs tab bisa tampil dan menampilkan log.
+- Bot tetap konek ke MT5 dan siap analisa/order.

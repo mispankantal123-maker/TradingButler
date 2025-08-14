@@ -1,0 +1,57 @@
+PS C:\Users\pras\Desktop\TradingButler> python fixed_main.py
+2025-08-14 09:02:47,617 - __main__ - INFO - ============================================================
+2025-08-14 09:02:47,618 - __main__ - INFO - STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY
+2025-08-14 09:02:47,618 - __main__ - INFO - ============================================================
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\pras\AppData\Local\Programs\Python\Python313\Lib\logging\__init__.py", line 1154, in emit
+    stream.write(msg + self.terminator)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\pras\AppData\Local\Programs\Python\Python313\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2705' in position 44: character maps to <undefined>
+Call stack:
+  File "C:\Users\pras\Desktop\TradingButler\fixed_main.py", line 132, in <module>
+    exit_code = main()
+  File "C:\Users\pras\Desktop\TradingButler\fixed_main.py", line 80, in main
+    logger.info("✅ MetaTrader5 module available - LIVE TRADING MODE")
+Message: '✅ MetaTrader5 module available - LIVE TRADING MODE'
+Arguments: ()
+2025-08-14 09:02:47,619 - __main__ - INFO - ✅ MetaTrader5 module available - LIVE TRADING MODE
+2025-08-14 09:02:47,732 - __main__ - INFO - Initializing FIXED controller...
+2025-08-14 09:02:47,734 - __main__ - INFO - Creating FIXED main window...
+2025-08-14 09:02:52,232 - __main__ - ERROR - Application startup error: UI setup failed: Logs tab creation failed: 'PySide6.QtWidgets.QTextEdit' object has no attribute 'setMaximumBlockCount'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\fixed_gui.py", line 674, in create_logs_tab
+    self.log_display.setMaximumBlockCount(1000)  # Limit log lines
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'PySide6.QtWidgets.QTextEdit' object has no attribute 'setMaximumBlockCount'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\fixed_gui.py", line 76, in setup_ui
+    self.create_logs_tab()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\pras\Desktop\TradingButler\fixed_gui.py", line 686, in create_logs_tab
+    raise Exception(f"Logs tab creation failed: {e}")
+Exception: Logs tab creation failed: 'PySide6.QtWidgets.QTextEdit' object has no attribute 'setMaximumBlockCount'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\fixed_main.py", line 100, in main
+    main_window = MainWindow(controller)
+  File "C:\Users\pras\Desktop\TradingButler\fixed_gui.py", line 42, in __init__
+    self.setup_ui()
+    ~~~~~~~~~~~~~^^
+  File "C:\Users\pras\Desktop\TradingButler\fixed_gui.py", line 80, in setup_ui
+    raise Exception(f"UI setup failed: {e}")
+Exception: UI setup failed: Logs tab creation failed: 'PySide6.QtWidgets.QTextEdit' object has no attribute 'setMaximumBlockCount'
+
+
+============================================================
+FIXED MT5 SCALPING BOT - SHUTDOWN
+❌ Application exited with errors
+============================================================

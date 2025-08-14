@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QLabel, QPushButton, QLineEdit, QSpinBox, QDoubleSpinBox,
-    QComboBox, QCheckBox, QTextEdit, QTableWidget, QTableWidgetItem,
+    QComboBox, QCheckBox, QTextEdit, QPlainTextEdit, QTableWidget, QTableWidgetItem,
     QGroupBox, QFormLayout, QGridLayout, QSplitter, QProgressBar,
     QStatusBar, QMessageBox, QFrame, QFileDialog
 )
@@ -67,14 +67,43 @@ class MainWindow(QMainWindow):
             self.tab_widget = QTabWidget()
             layout.addWidget(self.tab_widget)
             
-            # Create all tabs
-            self.create_dashboard_tab()
-            self.create_strategy_tab()
-            self.create_risk_tab()
-            self.create_execution_tab()
-            self.create_positions_tab()
-            self.create_logs_tab()
-            self.create_tools_tab()
+            # Create all tabs dengan error handling individual
+            try:
+                self.create_dashboard_tab()
+            except Exception as e:
+                print(f"Dashboard tab creation failed: {e}")
+                
+            try:
+                self.create_strategy_tab()
+            except Exception as e:
+                print(f"Strategy tab creation failed: {e}")
+                
+            try:
+                self.create_risk_tab()
+            except Exception as e:
+                print(f"Risk tab creation failed: {e}")
+                
+            try:
+                self.create_execution_tab()
+            except Exception as e:
+                print(f"Execution tab creation failed: {e}")
+                
+            try:
+                self.create_positions_tab()
+            except Exception as e:
+                print(f"Positions tab creation failed: {e}")
+                
+            try:
+                self.create_logs_tab()
+            except Exception as e:
+                print(f"Logs tab creation failed: {e}")
+                # Fallback: create simple logs tab
+                self.create_simple_logs_tab()
+                
+            try:
+                self.create_tools_tab()
+            except Exception as e:
+                print(f"Tools tab creation failed: {e}")
             
         except Exception as e:
             raise Exception(f"UI setup failed: {e}")
@@ -667,8 +696,8 @@ class MainWindow(QMainWindow):
             
             layout.addLayout(controls_layout)
             
-            # Log display
-            self.log_display = QTextEdit()
+            # Log display - gunakan QPlainTextEdit untuk setMaximumBlockCount
+            self.log_display = QPlainTextEdit()
             self.log_display.setReadOnly(True)
             self.log_display.setFont(QFont("Courier New", 10))
             self.log_display.setMaximumBlockCount(1000)  # Limit log lines
@@ -684,6 +713,32 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             raise Exception(f"Logs tab creation failed: {e}")
+    
+    def create_simple_logs_tab(self):
+        """Create simple fallback logs tab jika terjadi error"""
+        try:
+            logs = QWidget()
+            layout = QVBoxLayout(logs)
+            
+            # Simple log display tanpa fitur advanced
+            self.log_display = QTextEdit()
+            self.log_display.setReadOnly(True)
+            self.log_display.setFont(QFont("Courier New", 10))
+            
+            # Basic controls
+            controls_layout = QHBoxLayout()
+            self.clear_logs_btn = QPushButton("Clear Logs")
+            self.clear_logs_btn.clicked.connect(lambda: self.log_display.clear())
+            controls_layout.addWidget(self.clear_logs_btn)
+            controls_layout.addStretch()
+            
+            layout.addLayout(controls_layout)
+            layout.addWidget(self.log_display)
+            
+            self.tab_widget.addTab(logs, "Logs (Simple)")
+            
+        except Exception as e:
+            print(f"Simple logs tab creation failed: {e}")
     
     def create_tools_tab(self):
         """Create tools and utilities tab"""

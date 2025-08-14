@@ -52,15 +52,23 @@ from fixed_controller import BotController
 from fixed_gui import MainWindow
 
 def setup_logging():
-    """Configure comprehensive logging"""
+    """Configure comprehensive logging dengan Windows console fix"""
     log_dir = Path("logs")
     log_dir.mkdir(exist_ok=True)
+    
+    # Fix Windows console encoding untuk emoji
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Python < 3.7
+        pass
     
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(log_dir / 'scalping_bot.log'),
+            logging.FileHandler(log_dir / 'scalping_bot.log', encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -73,14 +81,14 @@ def main():
     logger.info("STARTING FIXED MT5 SCALPING BOT - PRODUCTION READY")
     logger.info("=" * 60)
     
-    # Import check
+    # Import check - gunakan teks biasa untuk log
     try:
         import MetaTrader5 as mt5
         MT5_AVAILABLE = True
-        logger.info("✅ MetaTrader5 module available - LIVE TRADING MODE")
+        logger.info("MetaTrader5 module available - LIVE TRADING MODE")
     except ImportError:
         MT5_AVAILABLE = False
-        logger.warning("⚠️ MetaTrader5 not available - DEMO MODE (mock data)")
+        logger.warning("MetaTrader5 not available - DEMO MODE (mock data)")
     
     # Create QApplication
     app = QApplication(sys.argv)
@@ -100,15 +108,15 @@ def main():
         main_window = MainWindow(controller)
         main_window.show()
         
-        logger.info("🚀 FIXED Bot Application initialized successfully!")
+        logger.info("FIXED Bot Application initialized successfully!")
         logger.info("PERBAIKAN YANG TELAH DITERAPKAN:")
-        logger.info("✅ 1. Analysis Worker dengan heartbeat setiap 1 detik")
-        logger.info("✅ 2. Auto-execute signals (non-shadow mode)")
-        logger.info("✅ 3. TP/SL input dinamis (ATR/Points/Pips/Balance%)")
-        logger.info("✅ 4. Pre-flight checks lengkap")
-        logger.info("✅ 5. Real-time data feed dengan error handling")
-        logger.info("✅ 6. Risk management dan emergency controls")
-        logger.info("✅ 7. Comprehensive logging dan diagnostics")
+        logger.info("1. Analysis Worker dengan heartbeat setiap 1 detik")
+        logger.info("2. Auto-execute signals (non-shadow mode)")
+        logger.info("3. TP/SL input dinamis (ATR/Points/Pips/Balance%)")
+        logger.info("4. Pre-flight checks lengkap")
+        logger.info("5. Real-time data feed dengan error handling")
+        logger.info("6. Risk management dan emergency controls")
+        logger.info("7. Comprehensive logging dan diagnostics")
         logger.info("=" * 60)
         logger.info("READY FOR PROFESSIONAL SCALPING ON XAUUSD")
         logger.info("Start → Connect → Start Bot untuk mulai trading!")
@@ -134,9 +142,9 @@ if __name__ == "__main__":
     print("\n" + "=" * 60)
     print("FIXED MT5 SCALPING BOT - SHUTDOWN")
     if exit_code == 0:
-        print("✅ Application closed normally")
+        print("Application closed normally")
     else:
-        print("❌ Application exited with errors")
+        print("Application exited with errors")
     print("=" * 60)
     
     sys.exit(exit_code)
