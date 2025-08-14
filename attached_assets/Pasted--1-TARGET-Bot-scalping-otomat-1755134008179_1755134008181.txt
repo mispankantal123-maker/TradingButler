@@ -1,0 +1,86 @@
+================================
+1. TARGET
+================================
+- Bot scalping otomatis untuk 1 simbol (default XAUUSD, tapi bisa autodetect simbol lain dari MT5).
+- GUI modern, rapi, tidak freeze (PySide6).
+- Auto analisa + auto order BUY/SELL sesuai strategi.
+- TP/SL fleksibel: ATR, Points, Pips, atau Persentase Balance.
+- Kompatibel 100% Windows + langsung connect MT5 real account.
+
+================================
+2. STRUKTUR PROYEK
+================================
+File yang harus ada:
+- **main.py** — Entry point, load GUI & BotController.
+- **controller.py** — BotController (QThread) yang handle koneksi MT5, ambil data, analisa, eksekusi order, risk management.
+- **gui.py** — PySide6 GUI: Dashboard, Strategy, Risk, Execution, Logs.
+- **indicators.py** — EMA, RSI, ATR (rumus benar atau iMA/iRSI/iATR dari MT5).
+- **utils.py** — lot sizing, spread check, session filter, kalkulasi TP/SL semua mode.
+- **requirements.txt** — MetaTrader5, PySide6, pandas, numpy.
+
+================================
+3. STRATEGI
+================================
+- **Trend Filter M5**:
+  - BUY jika EMA9 > EMA21 dan harga > EMA50.
+  - SELL jika EMA9 < EMA21 dan harga < EMA50.
+- **Entry M1**:
+  - Searah tren M5.
+  - Pullback ke EMA9/EMA21 M1 lalu close kembali searah tren.
+  - RSI re-cross 50 (opsional).
+  - Hindari doji (body < 30% range).
+- **Spread filter**: skip jika spread > max_spread_points.
+- **Session filter**: hanya London open & NY overlap.
+
+================================
+4. TP/SL MODES
+================================
+Dropdown pilihan mode di GUI:
+1. ATR — SL = max(minSL_points, ATR_M1 × multiplier), TP = R × SL.
+2. Points — SL & TP langsung input points.
+3. Pips — SL & TP input pips (1 pip = 10 points untuk 3/5 digit symbol).
+4. Persentase Balance — 
+   - TP% → target USD = balance × tp_percent
+   - SL% → target USD = balance × sl_percent
+   - USD → points: usd / (tick_value × lot_size)
+   - Konversi points → harga sesuai BUY/SELL.
+
+================================
+5. ORDER EXECUTION
+================================
+- BUY di Ask, SELL di Bid.
+- Hitung lot size by risk% dari balance:
+  lot = (balance × risk_percent) / (sl_points × tick_value)
+- Pasang order dengan TP & SL langsung.
+- Retry jika requote/gagal.
+
+================================
+6. RISK MANAGEMENT
+================================
+- Daily loss limit % (auto stop jika tercapai).
+- Max trades/day.
+- Max consecutive losses → cooldown.
+- Emergency stop (close semua posisi & stop bot).
+
+================================
+7. OUTPUT YANG DIMINTA
+================================
+1. Kode lengkap semua file.
+2. Semua fungsi GUI aktif: indikator live, sinyal live, eksekusi otomatis.
+3. Siap dijalankan di Windows:
+pip install -r requirements.txt
+python main.py
+
+pgsql
+Copy
+Edit
+4. Tidak ada dummy order/data.
+5. Tidak freeze atau crash saat dijalankan.
+
+================================
+CATATAN
+================================
+- Gunakan `pathlib` untuk path file.
+- Semua koneksi MT5 & eksekusi di thread terpisah (QThread).
+- Logging ke GUI & simpan CSV.
+- Sertakan mode shadow untuk test sinyal tanpa order.
