@@ -7,7 +7,7 @@ channel = "stable-25_05"
 packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
 
 [workflows]
-runButton = "Project"
+runButton = "MT5 Trading Bot"
 
 [[workflows.workflow]]
 name = "Project"
@@ -31,6 +31,15 @@ args = "python complete_scalping_bot.py"
 
 [[workflows.workflow]]
 name = "MT5 Real Trading Bot"
+author = 46394143
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[[workflows.workflow]]
+name = "MT5 Trading Bot"
 author = 46394143
 mode = "sequential"
 
