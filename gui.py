@@ -1103,6 +1103,10 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'system_time_label'):
                 self.system_time_label.setText(datetime.now().strftime("%H:%M:%S"))
             
+            # Update time in dashboard
+            if hasattr(self, 'time_label'):
+                self.time_label.setText(datetime.now().strftime("%H:%M:%S"))
+            
             # Update positions if controller is available and connected
             if (hasattr(self.controller, 'is_connected') and 
                 self.controller.is_connected and 

@@ -96,7 +96,8 @@ def main():
         app.setOrganizationName("MT5 Trading Solutions")
         
         # Set application properties for better integration
-        app.setAttribute(app.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
+        from PySide6.QtCore import Qt
+        app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
         
     except Exception as e:
         logger.error(f"Failed to create QApplication: {e}")

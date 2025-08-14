@@ -91,6 +91,7 @@ class BotController(QObject):
         self.is_connected = False
         self.is_running = False
         self.shadow_mode = True  # Start in shadow mode for safety
+        self.mt5_available = MT5_AVAILABLE
         
         # Configuration
         self.config = {
@@ -413,7 +414,7 @@ class BotController(QObject):
             self.log_message(f"Market data fallback error: {e}", "ERROR")
     
     def generate_signal(self, data: Dict) -> Optional[Dict]:
-        """Generate trading signals"""
+        """Generate advanced scalping signals using M5 trend + M1 pullback strategy"""
         try:
             if not data.get('indicators_m1') or not data.get('indicators_m5'):
                 return None
@@ -421,46 +422,87 @@ class BotController(QObject):
             m1_indicators = data['indicators_m1']
             m5_indicators = data['indicators_m5']
             
-            current_time = datetime.now()
+            # Check spread filter
+            if data.get('spread', 0) > self.config['max_spread_points']:
+                return None
             
-            # Simple signal generation for demo
+            # Get indicator values
+            m1_ema_fast = m1_indicators.get('ema_fast', 0)
+            m1_ema_medium = m1_indicators.get('ema_medium', 0)
+            m1_ema_slow = m1_indicators.get('ema_slow', 0)
+            m1_rsi = m1_indicators.get('rsi', 50)
+            m1_atr = m1_indicators.get('atr', 0.001)
+            
+            m5_ema_fast = m5_indicators.get('ema_fast', 0)
+            m5_ema_medium = m5_indicators.get('ema_medium', 0)
+            m5_ema_slow = m5_indicators.get('ema_slow', 0)
+            m5_rsi = m5_indicators.get('rsi', 50)
+            
+            current_price = data['ask']  # Use ask for signal price reference
+            
+            # BUY Signal Logic
+            # M5 Trend Filter: EMAs aligned bullish and price above slow EMA
+            m5_bullish_trend = (m5_ema_fast > m5_ema_medium > m5_ema_slow and 
+                               current_price > m5_ema_slow)
+            
+            # M1 Entry: Fast EMA above medium EMA (trend) + RSI confirmation
+            m1_bullish_setup = (m1_ema_fast > m1_ema_medium and 
+                               m1_rsi > 45 and m1_rsi < 75)  # Not overbought
+            
+            # Price action: Price near or above M1 fast EMA (pullback completion)
+            near_m1_ema = abs(current_price - m1_ema_fast) / current_price < 0.0005
+            
+            # SELL Signal Logic  
+            m5_bearish_trend = (m5_ema_fast < m5_ema_medium < m5_ema_slow and 
+                               current_price < m5_ema_slow)
+            
+            m1_bearish_setup = (m1_ema_fast < m1_ema_medium and 
+                               m1_rsi < 55 and m1_rsi > 25)  # Not oversold
+            
             signal_type = None
-            entry_price = data['bid']
+            entry_price = None
             
-            # Check for buy signal
-            if (m1_indicators.get('ema_fast', 0) > m1_indicators.get('ema_medium', 0) and
-                m5_indicators.get('rsi', 50) > 50):
+            # Generate BUY signal
+            if m5_bullish_trend and m1_bullish_setup and near_m1_ema:
                 signal_type = "BUY"
-                entry_price = data['ask']
-            
-            # Check for sell signal
-            elif (m1_indicators.get('ema_fast', 0) < m1_indicators.get('ema_medium', 0) and
-                  m5_indicators.get('rsi', 50) < 50):
-                signal_type = "SELL"
-                entry_price = data['bid']
+                entry_price = data['ask']  # Buy at ask price
+                
+            # Generate SELL signal
+            elif m5_bearish_trend and m1_bearish_setup and near_m1_ema:
+                signal_type = "SELL" 
+                entry_price = data['bid']  # Sell at bid price
             
             if signal_type:
-                atr = m1_indicators.get('atr', 0.001)
-                sl_distance = max(atr * 1.5, self.config['min_sl_points'] / 100000)
-                tp_distance = sl_distance * self.config['risk_multiple']
+                # Calculate SL/TP using ATR
+                atr_points = m1_atr * 100000  # Convert to points
+                sl_distance_points = max(self.config['min_sl_points'], 
+                                       int(atr_points * 1.5))
+                
+                # Convert back to price
+                sl_distance_price = sl_distance_points / 100000
+                tp_distance_price = sl_distance_price * self.config['risk_multiple']
                 
                 if signal_type == "BUY":
-                    sl_price = entry_price - sl_distance
-                    tp_price = entry_price + tp_distance
+                    sl_price = entry_price - sl_distance_price
+                    tp_price = entry_price + tp_distance_price
                 else:
-                    sl_price = entry_price + sl_distance
-                    tp_price = entry_price - tp_distance
+                    sl_price = entry_price + sl_distance_price
+                    tp_price = entry_price - tp_distance_price
+                
+                # Calculate optimal lot size
+                lot_size = self.calculate_lot_size(sl_distance_price)
                 
                 return {
                     'type': signal_type,
                     'entry_price': entry_price,
                     'sl_price': sl_price,
                     'tp_price': tp_price,
-                    'lot_size': self.calculate_lot_size(sl_distance),
+                    'lot_size': lot_size,
                     'risk_reward': self.config['risk_multiple'],
-                    'timestamp': current_time,
-                    'atr': atr,
-                    'spread': data.get('spread', 0)
+                    'timestamp': datetime.now(),
+                    'atr': m1_atr,
+                    'spread': data.get('spread', 0),
+                    'sl_points': sl_distance_points
                 }
             
             return None
@@ -492,14 +534,66 @@ class BotController(QObject):
             return 0.01
     
     def execute_signal(self, signal: Dict):
-        """Execute trading signal"""
+        """Execute trading signal with real MT5 orders"""
         try:
             if self.shadow_mode:
                 self.log_message(f"SHADOW: {signal['type']} signal at {signal['entry_price']:.5f}", "INFO")
                 return
             
-            # Real trading execution would go here
-            self.log_message(f"Executing {signal['type']} order", "INFO")
+            if not MT5_AVAILABLE or not self.is_connected:
+                self.log_message("Cannot execute - MT5 not available or not connected", "ERROR")
+                return
+            
+            symbol = self.config['symbol']
+            
+            # Get current prices
+            tick = mt5.symbol_info_tick(symbol)
+            if tick is None:
+                self.log_message("Cannot get current prices", "ERROR")
+                return
+            
+            # Prepare order request
+            order_type = mt5.ORDER_TYPE_BUY if signal['type'] == 'BUY' else mt5.ORDER_TYPE_SELL
+            price = tick.ask if signal['type'] == 'BUY' else tick.bid
+            
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": signal['lot_size'],
+                "type": order_type,
+                "price": price,
+                "sl": signal['sl_price'],
+                "tp": signal['tp_price'],
+                "deviation": 20,
+                "magic": 987654321,
+                "comment": f"Scalping {signal['type']}",
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+            
+            # Execute order
+            result = mt5.order_send(request)
+            
+            if result.retcode == mt5.TRADE_RETCODE_DONE:
+                self.daily_trades += 1
+                self.log_message(f"✅ Order executed: {signal['type']} {signal['lot_size']} lots at {price:.5f}", "INFO")
+                self.log_message(f"SL: {signal['sl_price']:.5f}, TP: {signal['tp_price']:.5f}", "INFO")
+                
+                # Log to CSV
+                with open(self.csv_file, 'a', newline='') as f:
+                    import csv
+                    writer = csv.writer(f)
+                    writer.writerow([
+                        signal['timestamp'].strftime('%Y-%m-%d %H:%M:%S'),
+                        signal['type'],
+                        price,
+                        signal['sl_price'],
+                        signal['tp_price'],
+                        signal['lot_size'],
+                        'EXECUTED'
+                    ])
+            else:
+                self.log_message(f"❌ Order failed: {result.comment} (Code: {result.retcode})", "ERROR")
             
         except Exception as e:
             self.log_message(f"Signal execution error: {e}", "ERROR")
@@ -648,3 +742,18 @@ class BotController(QObject):
         except Exception as e:
             self.log_message(f"Export error: {e}", "ERROR")
             return None
+    
+    def test_signal(self):
+        """Test signal generation"""
+        try:
+            if self.current_market_data:
+                signal = self.generate_signal(self.current_market_data)
+                if signal:
+                    self.signal_trade_signal.emit(signal)
+                    self.log_message(f"Test Signal Generated: {signal['type']} at {signal['entry_price']:.5f}", "INFO")
+                else:
+                    self.log_message("No signal generated in current market conditions", "INFO")
+            else:
+                self.log_message("No market data available for signal testing", "WARNING")
+        except Exception as e:
+            self.log_message(f"Test signal error: {e}", "ERROR")

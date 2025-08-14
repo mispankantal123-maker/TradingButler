@@ -1,334 +1,327 @@
+
 """
-Technical Indicators Module
-Accurate calculations for EMA, RSI, ATR and other indicators
-PRODUCTION READY FOR REAL TRADING
+Technical Indicators for MT5 Scalping Bot
+Implements EMA, RSI, ATR calculations for market analysis
+PRODUCTION READY - Optimized for real-time trading
 """
 
 import numpy as np
 import pandas as pd
-from typing import List, Optional, Union
+from typing import List, Optional
 import logging
 
 class TechnicalIndicators:
-    """Complete technical indicators calculator for trading bot"""
-
+    """Technical indicators calculator for scalping strategy"""
+    
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-
-    def calculate_ema(self, data: List[float], period: int) -> Optional[float]:
-        """Calculate Exponential Moving Average"""
+    
+    def ema(self, data: np.ndarray, period: int) -> np.ndarray:
+        """
+        Calculate Exponential Moving Average
+        
+        Args:
+            data: Price data array
+            period: EMA period
+            
+        Returns:
+            EMA values array
+        """
         try:
-            if not data or len(data) < period:
-                return None
-
-            # Convert to numpy array for efficiency
-            prices = np.array(data, dtype=float)
-
+            if len(data) < period:
+                return np.full(len(data), np.nan)
+            
             # Calculate multiplier
             multiplier = 2.0 / (period + 1)
-
-            # Initialize EMA with SMA
-            sma = np.mean(prices[:period])
-            ema = sma
-
-            # Calculate EMA for remaining data
-            for price in prices[period:]:
-                ema = (price * multiplier) + (ema * (1 - multiplier))
-
-            return float(ema)
-
+            
+            # Initialize EMA array
+            ema_values = np.zeros(len(data))
+            
+            # First EMA value is SMA
+            ema_values[period-1] = np.mean(data[:period])
+            
+            # Calculate EMA for remaining values
+            for i in range(period, len(data)):
+                ema_values[i] = (data[i] * multiplier) + (ema_values[i-1] * (1 - multiplier))
+            
+            # Set initial values to NaN
+            ema_values[:period-1] = np.nan
+            
+            return ema_values
+            
         except Exception as e:
             self.logger.error(f"EMA calculation error: {e}")
-            return None
-
-    def calculate_sma(self, data: List[float], period: int) -> Optional[float]:
-        """Calculate Simple Moving Average"""
+            return np.full(len(data), np.nan)
+    
+    def rsi(self, data: np.ndarray, period: int = 14) -> np.ndarray:
+        """
+        Calculate Relative Strength Index
+        
+        Args:
+            data: Price data array
+            period: RSI period (default 14)
+            
+        Returns:
+            RSI values array
+        """
         try:
-            if not data or len(data) < period:
-                return None
-
-            return float(np.mean(data[-period:]))
-
-        except Exception as e:
-            self.logger.error(f"SMA calculation error: {e}")
-            return None
-
-    def calculate_rsi(self, data: List[float], period: int = 14) -> Optional[float]:
-        """Calculate Relative Strength Index"""
-        try:
-            if not data or len(data) < period + 1:
-                return None
-
-            prices = np.array(data, dtype=float)
-
+            if len(data) < period + 1:
+                return np.full(len(data), 50.0)
+            
             # Calculate price changes
-            deltas = np.diff(prices)
-
+            delta = np.diff(data)
+            
             # Separate gains and losses
-            gains = np.where(deltas > 0, deltas, 0)
-            losses = np.where(deltas < 0, -deltas, 0)
-
+            gains = np.where(delta > 0, delta, 0)
+            losses = np.where(delta < 0, -delta, 0)
+            
             # Calculate average gains and losses
-            avg_gain = np.mean(gains[-period:])
-            avg_loss = np.mean(losses[-period:])
-
-            # Avoid division by zero
-            if avg_loss == 0:
-                return 100.0
-
-            # Calculate RS and RSI
-            rs = avg_gain / avg_loss
-            rsi = 100.0 - (100.0 / (1.0 + rs))
-
-            return float(rsi)
-
+            avg_gains = np.zeros(len(gains))
+            avg_losses = np.zeros(len(losses))
+            
+            # Initial averages (SMA)
+            avg_gains[period-1] = np.mean(gains[:period])
+            avg_losses[period-1] = np.mean(losses[:period])
+            
+            # Calculate smoothed averages
+            for i in range(period, len(gains)):
+                avg_gains[i] = (avg_gains[i-1] * (period - 1) + gains[i]) / period
+                avg_losses[i] = (avg_losses[i-1] * (period - 1) + losses[i]) / period
+            
+            # Calculate RSI
+            rsi_values = np.zeros(len(data))
+            rsi_values[:period] = 50.0  # Default RSI for insufficient data
+            
+            for i in range(period, len(data)):
+                if avg_losses[i-1] == 0:
+                    rsi_values[i] = 100.0
+                else:
+                    rs = avg_gains[i-1] / avg_losses[i-1]
+                    rsi_values[i] = 100.0 - (100.0 / (1.0 + rs))
+            
+            return rsi_values
+            
         except Exception as e:
             self.logger.error(f"RSI calculation error: {e}")
-            return 50.0  # Return neutral RSI on error
-
-    def calculate_atr(self, high: List[float], low: List[float], close: List[float], period: int = 14) -> Optional[float]:
-        """Calculate Average True Range"""
+            return np.full(len(data), 50.0)
+    
+    def atr(self, high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> np.ndarray:
+        """
+        Calculate Average True Range
+        
+        Args:
+            high: High prices array
+            low: Low prices array
+            close: Close prices array
+            period: ATR period (default 14)
+            
+        Returns:
+            ATR values array
+        """
         try:
-            if not all([high, low, close]) or len(high) < period + 1:
-                return None
-
-            if not (len(high) == len(low) == len(close)):
-                return None
-
-            # Convert to numpy arrays
-            highs = np.array(high, dtype=float)
-            lows = np.array(low, dtype=float)
-            closes = np.array(close, dtype=float)
-
-            # Calculate True Range components
-            tr1 = highs[1:] - lows[1:]  # High - Low
-            tr2 = np.abs(highs[1:] - closes[:-1])  # |High - Previous Close|
-            tr3 = np.abs(lows[1:] - closes[:-1])   # |Low - Previous Close|
-
-            # True Range is the maximum of the three
-            true_ranges = np.maximum(tr1, np.maximum(tr2, tr3))
-
-            # Calculate ATR as simple moving average of True Ranges
-            if len(true_ranges) >= period:
-                atr = np.mean(true_ranges[-period:])
-                return float(atr)
-
-            return None
-
+            if len(high) < period + 1:
+                return np.full(len(high), 0.001)
+            
+            # Calculate True Range
+            tr_list = []
+            
+            for i in range(1, len(high)):
+                tr1 = high[i] - low[i]
+                tr2 = abs(high[i] - close[i-1])
+                tr3 = abs(low[i] - close[i-1])
+                tr = max(tr1, tr2, tr3)
+                tr_list.append(tr)
+            
+            tr_array = np.array(tr_list)
+            
+            # Calculate ATR using EMA
+            atr_values = np.zeros(len(high))
+            atr_values[0] = 0.001  # Default for first value
+            
+            if len(tr_array) >= period:
+                # Initial ATR is SMA of TR
+                atr_values[period] = np.mean(tr_array[:period])
+                
+                # Calculate subsequent ATR values
+                multiplier = 1.0 / period
+                for i in range(period + 1, len(high)):
+                    if i - 1 < len(tr_array):
+                        atr_values[i] = ((atr_values[i-1] * (period - 1)) + tr_array[i-1]) / period
+                    else:
+                        atr_values[i] = atr_values[i-1]
+                
+                # Fill initial values
+                for i in range(1, period):
+                    atr_values[i] = atr_values[period]
+            else:
+                atr_values.fill(0.001)
+            
+            return atr_values
+            
         except Exception as e:
             self.logger.error(f"ATR calculation error: {e}")
-            return 0.001  # Return small default value on error
-
-    def calculate_bollinger_bands(self, data: List[float], period: int = 20, std_dev: float = 2.0) -> Optional[dict]:
-        """Calculate Bollinger Bands"""
+            return np.full(len(high), 0.001)
+    
+    def calculate_ema(self, data: List[float], period: int) -> Optional[float]:
+        """
+        Calculate single EMA value (for compatibility)
+        
+        Args:
+            data: Price data list
+            period: EMA period
+            
+        Returns:
+            Current EMA value or None
+        """
         try:
-            if not data or len(data) < period:
+            if len(data) < period:
                 return None
-
-            prices = np.array(data[-period:], dtype=float)
-
-            # Calculate middle band (SMA)
-            middle = np.mean(prices)
-
-            # Calculate standard deviation
-            std = np.std(prices)
-
-            # Calculate upper and lower bands
-            upper = middle + (std * std_dev)
-            lower = middle - (std * std_dev)
-
-            return {
-                'upper': float(upper),
-                'middle': float(middle),
-                'lower': float(lower),
-                'std': float(std)
-            }
-
+            
+            data_array = np.array(data, dtype=np.float64)
+            ema_values = self.ema(data_array, period)
+            
+            # Return last valid EMA value
+            valid_values = ema_values[~np.isnan(ema_values)]
+            return float(valid_values[-1]) if len(valid_values) > 0 else None
+            
+        except Exception as e:
+            self.logger.error(f"Single EMA calculation error: {e}")
+            return None
+    
+    def calculate_rsi(self, data: List[float], period: int) -> float:
+        """
+        Calculate single RSI value (for compatibility)
+        
+        Args:
+            data: Price data list
+            period: RSI period
+            
+        Returns:
+            Current RSI value
+        """
+        try:
+            if len(data) < period + 1:
+                return 50.0
+            
+            data_array = np.array(data, dtype=np.float64)
+            rsi_values = self.rsi(data_array, period)
+            
+            return float(rsi_values[-1])
+            
+        except Exception as e:
+            self.logger.error(f"Single RSI calculation error: {e}")
+            return 50.0
+    
+    def calculate_atr(self, high: List[float], low: List[float], close: List[float], period: int) -> float:
+        """
+        Calculate single ATR value (for compatibility)
+        
+        Args:
+            high: High prices list
+            low: Low prices list
+            close: Close prices list
+            period: ATR period
+            
+        Returns:
+            Current ATR value
+        """
+        try:
+            if len(high) < period + 1:
+                return 0.001
+            
+            high_array = np.array(high, dtype=np.float64)
+            low_array = np.array(low, dtype=np.float64)
+            close_array = np.array(close, dtype=np.float64)
+            
+            atr_values = self.atr(high_array, low_array, close_array, period)
+            
+            return float(atr_values[-1])
+            
+        except Exception as e:
+            self.logger.error(f"Single ATR calculation error: {e}")
+            return 0.001
+    
+    def bollinger_bands(self, data: np.ndarray, period: int = 20, std_dev: float = 2.0) -> tuple:
+        """
+        Calculate Bollinger Bands
+        
+        Args:
+            data: Price data array
+            period: Moving average period
+            std_dev: Standard deviation multiplier
+            
+        Returns:
+            Tuple of (upper_band, middle_band, lower_band)
+        """
+        try:
+            if len(data) < period:
+                return np.full(len(data), np.nan), np.full(len(data), np.nan), np.full(len(data), np.nan)
+            
+            # Calculate SMA (middle band)
+            sma = np.zeros(len(data))
+            std = np.zeros(len(data))
+            
+            for i in range(period - 1, len(data)):
+                sma[i] = np.mean(data[i - period + 1:i + 1])
+                std[i] = np.std(data[i - period + 1:i + 1])
+            
+            # Calculate bands
+            upper_band = sma + (std * std_dev)
+            lower_band = sma - (std * std_dev)
+            
+            # Set initial values to NaN
+            sma[:period-1] = np.nan
+            upper_band[:period-1] = np.nan
+            lower_band[:period-1] = np.nan
+            
+            return upper_band, sma, lower_band
+            
         except Exception as e:
             self.logger.error(f"Bollinger Bands calculation error: {e}")
-            return None
-
-    def calculate_macd(self, data: List[float], fast_period: int = 12, slow_period: int = 26, signal_period: int = 9) -> Optional[dict]:
-        """Calculate MACD (Moving Average Convergence Divergence)"""
+            nan_array = np.full(len(data), np.nan)
+            return nan_array, nan_array, nan_array
+    
+    def macd(self, data: np.ndarray, fast: int = 12, slow: int = 26, signal: int = 9) -> tuple:
+        """
+        Calculate MACD (Moving Average Convergence Divergence)
+        
+        Args:
+            data: Price data array
+            fast: Fast EMA period
+            slow: Slow EMA period
+            signal: Signal line EMA period
+            
+        Returns:
+            Tuple of (macd_line, signal_line, histogram)
+        """
         try:
-            if not data or len(data) < slow_period:
-                return None
-
+            if len(data) < slow:
+                nan_array = np.full(len(data), np.nan)
+                return nan_array, nan_array, nan_array
+            
             # Calculate EMAs
-            ema_fast = self.calculate_ema(data, fast_period)
-            ema_slow = self.calculate_ema(data, slow_period)
-
-            if ema_fast is None or ema_slow is None:
-                return None
-
+            ema_fast = self.ema(data, fast)
+            ema_slow = self.ema(data, slow)
+            
             # Calculate MACD line
             macd_line = ema_fast - ema_slow
-
-            # For signal line, we would need historical MACD values
-            # Simplified version returns just the MACD line
-            return {
-                'macd': float(macd_line),
-                'signal': 0.0,  # Simplified
-                'histogram': float(macd_line)
-            }
-
+            
+            # Calculate signal line
+            signal_line = self.ema(macd_line[~np.isnan(macd_line)], signal)
+            
+            # Align signal line with MACD line
+            aligned_signal = np.full(len(data), np.nan)
+            valid_start = slow - 1 + signal - 1
+            if valid_start < len(data) and len(signal_line) > 0:
+                end_idx = min(valid_start + len(signal_line), len(data))
+                aligned_signal[valid_start:end_idx] = signal_line[:end_idx - valid_start]
+            
+            # Calculate histogram
+            histogram = macd_line - aligned_signal
+            
+            return macd_line, aligned_signal, histogram
+            
         except Exception as e:
             self.logger.error(f"MACD calculation error: {e}")
-            return None
-
-    def calculate_stochastic(self, high: List[float], low: List[float], close: List[float], k_period: int = 14, d_period: int = 3) -> Optional[dict]:
-        """Calculate Stochastic Oscillator"""
-        try:
-            if not all([high, low, close]) or len(high) < k_period:
-                return None
-
-            if not (len(high) == len(low) == len(close)):
-                return None
-
-            # Get recent data
-            recent_high = high[-k_period:]
-            recent_low = low[-k_period:]
-            current_close = close[-1]
-
-            # Calculate %K
-            highest_high = max(recent_high)
-            lowest_low = min(recent_low)
-
-            if highest_high == lowest_low:
-                k_percent = 50.0
-            else:
-                k_percent = ((current_close - lowest_low) / (highest_high - lowest_low)) * 100
-
-            # %D would require historical %K values
-            # Simplified version
-            d_percent = k_percent  # Simplified
-
-            return {
-                'k': float(k_percent),
-                'd': float(d_percent)
-            }
-
-        except Exception as e:
-            self.logger.error(f"Stochastic calculation error: {e}")
-            return None
-
-    def calculate_williams_r(self, high: List[float], low: List[float], close: List[float], period: int = 14) -> Optional[float]:
-        """Calculate Williams %R"""
-        try:
-            if not all([high, low, close]) or len(high) < period:
-                return None
-
-            # Get recent data
-            recent_high = high[-period:]
-            recent_low = low[-period:]
-            current_close = close[-1]
-
-            highest_high = max(recent_high)
-            lowest_low = min(recent_low)
-
-            if highest_high == lowest_low:
-                return -50.0
-
-            williams_r = ((highest_high - current_close) / (highest_high - lowest_low)) * -100
-
-            return float(williams_r)
-
-        except Exception as e:
-            self.logger.error(f"Williams %R calculation error: {e}")
-            return -50.0
-
-    def calculate_momentum(self, data: List[float], period: int = 10) -> Optional[float]:
-        """Calculate Momentum indicator"""
-        try:
-            if not data or len(data) < period + 1:
-                return None
-
-            current_price = data[-1]
-            past_price = data[-(period + 1)]
-
-            momentum = current_price - past_price
-
-            return float(momentum)
-
-        except Exception as e:
-            self.logger.error(f"Momentum calculation error: {e}")
-            return None
-
-    def is_trend_bullish(self, ema_fast: float, ema_medium: float, ema_slow: float) -> bool:
-        """Check if trend is bullish based on EMA alignment"""
-        try:
-            return ema_fast > ema_medium > ema_slow
-        except:
-            return False
-
-    def is_trend_bearish(self, ema_fast: float, ema_medium: float, ema_slow: float) -> bool:
-        """Check if trend is bearish based on EMA alignment"""
-        try:
-            return ema_fast < ema_medium < ema_slow
-        except:
-            return False
-
-    def calculate_support_resistance(self, highs: List[float], lows: List[float], period: int = 20) -> Optional[dict]:
-        """Calculate basic support and resistance levels"""
-        try:
-            if not all([highs, lows]) or len(highs) < period:
-                return None
-
-            recent_highs = highs[-period:]
-            recent_lows = lows[-period:]
-
-            resistance = max(recent_highs)
-            support = min(recent_lows)
-
-            return {
-                'resistance': float(resistance),
-                'support': float(support),
-                'range': float(resistance - support)
-            }
-
-        except Exception as e:
-            self.logger.error(f"Support/Resistance calculation error: {e}")
-            return None
-
-    def calculate_volatility(self, data: List[float], period: int = 20) -> Optional[float]:
-        """Calculate price volatility (standard deviation)"""
-        try:
-            if not data or len(data) < period:
-                return None
-
-            recent_data = data[-period:]
-            volatility = np.std(recent_data)
-
-            return float(volatility)
-
-        except Exception as e:
-            self.logger.error(f"Volatility calculation error: {e}")
-            return None
-
-    def get_trend_strength(self, ema_fast: float, ema_medium: float, ema_slow: float) -> float:
-        """Calculate trend strength based on EMA separation"""
-        try:
-            if not all([ema_fast, ema_medium, ema_slow]):
-                return 0.0
-
-            # Calculate relative separation
-            total_range = abs(ema_fast - ema_slow)
-            if total_range == 0:
-                return 0.0
-
-            # Trend strength based on EMA alignment
-            if ema_fast > ema_medium > ema_slow:
-                # Bullish trend
-                strength = min(1.0, total_range / ema_slow * 100)
-            elif ema_fast < ema_medium < ema_slow:
-                # Bearish trend
-                strength = min(1.0, total_range / ema_slow * 100)
-            else:
-                # Sideways/unclear
-                strength = 0.0
-
-            return float(strength)
-
-        except Exception as e:
-            self.logger.error(f"Trend strength calculation error: {e}")
-            return 0.0
+            nan_array = np.full(len(data), np.nan)
+            return nan_array, nan_array, nan_array
