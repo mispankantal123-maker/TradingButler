@@ -1,0 +1,40 @@
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'
+Traceback (most recent call last):
+  File "C:\Users\pras\Desktop\TradingButler\comprehensive_scalping_bot.py", line 1788, in on_log_message
+    cursor.movePosition(cursor.End)
+                        ^^^^^^^^^^
+AttributeError: 'PySide6.QtGui.QTextCursor' object has no attribute 'End'

@@ -58,10 +58,12 @@ def setup_logging():
     
     # Fix Windows console encoding untuk emoji
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
-    except AttributeError:
-        # Python < 3.7
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+        if hasattr(sys.stderr, 'reconfigure'):
+            sys.stderr.reconfigure(encoding='utf-8')
+    except (AttributeError, OSError):
+        # Python < 3.7 atau tidak support reconfigure
         pass
     
     logging.basicConfig(
@@ -94,7 +96,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("MT5 Professional Scalping Bot - FIXED")
     app.setApplicationVersion("2.1.0")
-    app.setAttribute(Qt.AA_DontUseNativeMenuBar, True)  # Fix untuk beberapa sistem
+    # app.setAttribute(Qt.AA_DontUseNativeMenuBar, True)  # Fix untuk beberapa sistem
     
     try:
         logger.info("Initializing FIXED controller...")
