@@ -26,25 +26,7 @@ except ImportError:
     print("⚠️ MetaTrader5 not available - Running in demo mode")
 
 # Import indicators
-try:
-    from indicators import TechnicalIndicators
-except ImportError:
-    # Fallback simple indicators
-    class TechnicalIndicators:
-        def calculate_ema(self, data, period):
-            if len(data) < period:
-                return None
-            return sum(data[-period:]) / period
-        
-        def calculate_rsi(self, data, period):
-            if len(data) < period + 1:
-                return 50.0
-            return 50.0
-        
-        def calculate_atr(self, high, low, close, period):
-            if len(high) < period:
-                return 0.0001
-            return 0.0001
+from indicators import TechnicalIndicators
 
 class MarketDataWorker(QThread):
     """Worker thread for market data collection"""
@@ -82,6 +64,7 @@ class BotController(QObject):
     signal_trade_signal = Signal(dict)  # trade signals
     signal_position_update = Signal(list)  # positions list
     signal_account_update = Signal(dict)  # account info
+    signal_indicators_update = Signal(dict)  # indicators update
     
     def __init__(self):
         super().__init__()
@@ -104,7 +87,14 @@ class BotController(QObject):
             'risk_multiple': 2.0,
             'ema_periods': {'fast': 8, 'medium': 21, 'slow': 50},
             'rsi_period': 14,
-            'atr_period': 14
+            'atr_period': 14,
+            'tp_sl_mode': 'ATR',  # ATR, Points, Pips, Percent
+            'tp_percent': 1.0,    # TP percentage of balance
+            'sl_percent': 0.5,    # SL percentage of balance
+            'tp_points': 200,     # TP in points
+            'sl_points': 100,     # SL in points
+            'tp_pips': 20,        # TP in pips
+            'sl_pips': 10         # SL in pips
         }
         
         # Trading state
@@ -115,6 +105,7 @@ class BotController(QObject):
         # Market data
         self.current_market_data = {}
         self.current_signal = {}
+        self.current_indicators = {'M1': {}, 'M5': {}}
         self.account_info = None
         self.positions = []
         
@@ -381,6 +372,15 @@ class BotController(QObject):
         try:
             self.data_mutex.lock()
             self.current_market_data = data
+            
+            # Update indicators for GUI
+            if 'indicators_m1' in data and 'indicators_m5' in data:
+                self.current_indicators = {
+                    'M1': data['indicators_m1'] or {},
+                    'M5': data['indicators_m5'] or {}
+                }
+                self.signal_indicators_update.emit(self.current_indicators)
+            
             self.data_mutex.unlock()
             
             # Emit to GUI
@@ -414,7 +414,7 @@ class BotController(QObject):
             self.log_message(f"Market data fallback error: {e}", "ERROR")
     
     def generate_signal(self, data: Dict) -> Optional[Dict]:
-        """Generate advanced scalping signals using M5 trend + M1 pullback strategy"""
+        """Generate scalping signals using M5 trend + M1 pullback strategy"""
         try:
             if not data.get('indicators_m1') or not data.get('indicators_m5'):
                 return None
@@ -426,17 +426,21 @@ class BotController(QObject):
             if data.get('spread', 0) > self.config['max_spread_points']:
                 return None
             
-            # Get indicator values
-            m1_ema_fast = m1_indicators.get('ema_fast', 0)
-            m1_ema_medium = m1_indicators.get('ema_medium', 0)
-            m1_ema_slow = m1_indicators.get('ema_slow', 0)
+            # Get indicator values with safe access
+            m1_ema_fast = m1_indicators.get('ema_fast')
+            m1_ema_medium = m1_indicators.get('ema_medium')
+            m1_ema_slow = m1_indicators.get('ema_slow')
             m1_rsi = m1_indicators.get('rsi', 50)
             m1_atr = m1_indicators.get('atr', 0.001)
             
-            m5_ema_fast = m5_indicators.get('ema_fast', 0)
-            m5_ema_medium = m5_indicators.get('ema_medium', 0)
-            m5_ema_slow = m5_indicators.get('ema_slow', 0)
+            m5_ema_fast = m5_indicators.get('ema_fast')
+            m5_ema_medium = m5_indicators.get('ema_medium')
+            m5_ema_slow = m5_indicators.get('ema_slow')
             m5_rsi = m5_indicators.get('rsi', 50)
+            
+            # Validate all indicators are available
+            if any(x is None for x in [m1_ema_fast, m1_ema_medium, m1_ema_slow, m5_ema_fast, m5_ema_medium, m5_ema_slow]):
+                return None
             
             current_price = data['ask']  # Use ask for signal price reference
             
@@ -473,24 +477,14 @@ class BotController(QObject):
                 entry_price = data['bid']  # Sell at bid price
             
             if signal_type:
-                # Calculate SL/TP using ATR
-                atr_points = m1_atr * 100000  # Convert to points
-                sl_distance_points = max(self.config['min_sl_points'], 
-                                       int(atr_points * 1.5))
+                # Calculate SL/TP based on selected mode
+                sl_price, tp_price = self.calculate_sl_tp(signal_type, entry_price, m1_atr)
                 
-                # Convert back to price
-                sl_distance_price = sl_distance_points / 100000
-                tp_distance_price = sl_distance_price * self.config['risk_multiple']
-                
-                if signal_type == "BUY":
-                    sl_price = entry_price - sl_distance_price
-                    tp_price = entry_price + tp_distance_price
-                else:
-                    sl_price = entry_price + sl_distance_price
-                    tp_price = entry_price - tp_distance_price
+                if sl_price is None or tp_price is None:
+                    return None
                 
                 # Calculate optimal lot size
-                lot_size = self.calculate_lot_size(sl_distance_price)
+                lot_size = self.calculate_lot_size(abs(entry_price - sl_price))
                 
                 return {
                     'type': signal_type,
@@ -498,11 +492,12 @@ class BotController(QObject):
                     'sl_price': sl_price,
                     'tp_price': tp_price,
                     'lot_size': lot_size,
-                    'risk_reward': self.config['risk_multiple'],
+                    'risk_reward': abs(tp_price - entry_price) / abs(entry_price - sl_price) if abs(entry_price - sl_price) > 0 else 0,
                     'timestamp': datetime.now(),
                     'atr': m1_atr,
                     'spread': data.get('spread', 0),
-                    'sl_points': sl_distance_points
+                    'sl_points': int(abs(entry_price - sl_price) * 100000),
+                    'tp_points': int(abs(tp_price - entry_price) * 100000)
                 }
             
             return None
@@ -510,6 +505,64 @@ class BotController(QObject):
         except Exception as e:
             self.log_message(f"Signal generation error: {e}", "ERROR")
             return None
+    
+    def calculate_sl_tp(self, signal_type: str, entry_price: float, atr_value: float) -> Tuple[Optional[float], Optional[float]]:
+        """Calculate SL and TP based on selected mode"""
+        try:
+            mode = self.config['tp_sl_mode']
+            
+            if mode == 'ATR':
+                # ATR-based calculation
+                atr_points = atr_value * 100000
+                sl_distance_points = max(self.config['min_sl_points'], int(atr_points * 1.5))
+                tp_distance_points = int(sl_distance_points * self.config['risk_multiple'])
+                
+                sl_distance_price = sl_distance_points / 100000
+                tp_distance_price = tp_distance_points / 100000
+                
+            elif mode == 'Points':
+                # Points-based calculation
+                sl_distance_price = self.config['sl_points'] / 100000
+                tp_distance_price = self.config['tp_points'] / 100000
+                
+            elif mode == 'Pips':
+                # Pips-based calculation (1 pip = 10 points for 5-digit symbols)
+                sl_distance_price = (self.config['sl_pips'] * 10) / 100000
+                tp_distance_price = (self.config['tp_pips'] * 10) / 100000
+                
+            elif mode == 'Percent':
+                # Percentage-based calculation
+                if not self.account_info:
+                    return None, None
+                
+                balance = self.account_info.balance
+                sl_usd = balance * (self.config['sl_percent'] / 100)
+                tp_usd = balance * (self.config['tp_percent'] / 100)
+                
+                # Convert USD to price distance
+                # Simplified calculation - should be refined for actual implementation
+                tick_value = 1.0  # USD per point for XAUUSD
+                lot_size = 0.01   # Estimate
+                
+                sl_distance_price = sl_usd / (tick_value * lot_size * 100000)
+                tp_distance_price = tp_usd / (tick_value * lot_size * 100000)
+                
+            else:
+                return None, None
+            
+            # Apply direction
+            if signal_type == "BUY":
+                sl_price = entry_price - sl_distance_price
+                tp_price = entry_price + tp_distance_price
+            else:  # SELL
+                sl_price = entry_price + sl_distance_price
+                tp_price = entry_price - tp_distance_price
+            
+            return sl_price, tp_price
+            
+        except Exception as e:
+            self.log_message(f"SL/TP calculation error: {e}", "ERROR")
+            return None, None
     
     def calculate_lot_size(self, sl_distance: float) -> float:
         """Calculate lot size based on risk"""

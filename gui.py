@@ -1,7 +1,7 @@
 
 """
 PySide6 GUI for MT5 Scalping Bot - PRODUCTION READY
-Modern tabbed interface with real-time updates and robust error handling
+Modern tabbed interface with TP/SL manual input and real-time updates
 CRITICAL FOR REAL MONEY TRADING
 """
 
@@ -311,7 +311,7 @@ class MainWindow(QMainWindow):
             raise Exception(f"Strategy tab creation failed: {e}")
     
     def create_risk_tab(self):
-        """Create risk management tab with comprehensive controls"""
+        """Create risk management tab with TP/SL manual input"""
         try:
             risk = QWidget()
             layout = QVBoxLayout(risk)
@@ -358,6 +358,77 @@ class MainWindow(QMainWindow):
             risk_layout.addRow("📏 Max Spread:", self.max_spread_spin)
             risk_layout.addRow("🛡️ Min SL Distance:", self.min_sl_spin)
             
+            # TP/SL Manual Configuration - NEW FEATURE
+            tp_sl_group = QGroupBox("🎯 TP/SL Manual Configuration")
+            tp_sl_layout = QFormLayout(tp_sl_group)
+            
+            # TP/SL Mode Selection
+            self.tp_sl_mode_combo = QComboBox()
+            self.tp_sl_mode_combo.addItems(["ATR", "Points", "Pips", "Percent"])
+            self.tp_sl_mode_combo.setCurrentText("ATR")
+            self.tp_sl_mode_combo.currentTextChanged.connect(self.on_tp_sl_mode_changed)
+            
+            tp_sl_layout.addRow("🔧 TP/SL Mode:", self.tp_sl_mode_combo)
+            
+            # ATR Mode Controls (default)
+            self.atr_multiplier_spin = QDoubleSpinBox()
+            self.atr_multiplier_spin.setRange(0.5, 5.0)
+            self.atr_multiplier_spin.setValue(1.5)
+            self.atr_multiplier_spin.setDecimals(1)
+            
+            # Points Mode Controls
+            self.tp_points_spin = QSpinBox()
+            self.tp_points_spin.setRange(50, 1000)
+            self.tp_points_spin.setValue(200)
+            self.tp_points_spin.setSuffix(" pts")
+            
+            self.sl_points_spin = QSpinBox()
+            self.sl_points_spin.setRange(50, 500)
+            self.sl_points_spin.setValue(100)
+            self.sl_points_spin.setSuffix(" pts")
+            
+            # Pips Mode Controls
+            self.tp_pips_spin = QSpinBox()
+            self.tp_pips_spin.setRange(5, 100)
+            self.tp_pips_spin.setValue(20)
+            self.tp_pips_spin.setSuffix(" pips")
+            
+            self.sl_pips_spin = QSpinBox()
+            self.sl_pips_spin.setRange(5, 50)
+            self.sl_pips_spin.setValue(10)
+            self.sl_pips_spin.setSuffix(" pips")
+            
+            # Percent Mode Controls
+            self.tp_percent_spin = QDoubleSpinBox()
+            self.tp_percent_spin.setRange(0.1, 10.0)
+            self.tp_percent_spin.setValue(1.0)
+            self.tp_percent_spin.setSuffix("% balance")
+            self.tp_percent_spin.setDecimals(2)
+            
+            self.sl_percent_spin = QDoubleSpinBox()
+            self.sl_percent_spin.setRange(0.1, 5.0)
+            self.sl_percent_spin.setValue(0.5)
+            self.sl_percent_spin.setSuffix("% balance")
+            self.sl_percent_spin.setDecimals(2)
+            
+            # Add controls to layout
+            tp_sl_layout.addRow("🔄 ATR Multiplier:", self.atr_multiplier_spin)
+            tp_sl_layout.addRow("🎯 TP Points:", self.tp_points_spin)
+            tp_sl_layout.addRow("🛡️ SL Points:", self.sl_points_spin)
+            tp_sl_layout.addRow("🎯 TP Pips:", self.tp_pips_spin)
+            tp_sl_layout.addRow("🛡️ SL Pips:", self.sl_pips_spin)
+            tp_sl_layout.addRow("🎯 TP Percent:", self.tp_percent_spin)
+            tp_sl_layout.addRow("🛡️ SL Percent:", self.sl_percent_spin)
+            
+            # Initially hide non-ATR controls
+            self.on_tp_sl_mode_changed("ATR")
+            
+            # Apply button for TP/SL settings
+            apply_tp_sl_btn = QPushButton("✅ Apply TP/SL Settings")
+            apply_tp_sl_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; font-weight: bold; }")
+            apply_tp_sl_btn.clicked.connect(self.on_apply_tp_sl_settings)
+            tp_sl_layout.addRow(apply_tp_sl_btn)
+            
             # Daily statistics display
             stats_group = QGroupBox("📊 Daily Trading Statistics")
             stats_layout = QFormLayout(stats_group)
@@ -388,6 +459,7 @@ class MainWindow(QMainWindow):
             stats_layout.addRow("🔴 Avg Loss:", self.avg_loss_label)
             
             layout.addWidget(risk_group)
+            layout.addWidget(tp_sl_group)
             layout.addWidget(stats_group)
             layout.addStretch()
             
@@ -614,6 +686,8 @@ class MainWindow(QMainWindow):
                 self.controller.signal_position_update.connect(self.update_positions)
             if hasattr(self.controller, 'signal_account_update'):
                 self.controller.signal_account_update.connect(self.update_account_display)
+            if hasattr(self.controller, 'signal_indicators_update'):
+                self.controller.signal_indicators_update.connect(self.update_indicators_display)
                 
         except Exception as e:
             print(f"Signal connection error: {e}")
@@ -646,6 +720,62 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             print(f"Display initialization error: {e}")
+    
+    # TP/SL Mode Management
+    def on_tp_sl_mode_changed(self, mode):
+        """Handle TP/SL mode change"""
+        try:
+            # Hide all mode-specific controls first
+            self.atr_multiplier_spin.setVisible(False)
+            self.tp_points_spin.setVisible(False)
+            self.sl_points_spin.setVisible(False)
+            self.tp_pips_spin.setVisible(False)
+            self.sl_pips_spin.setVisible(False)
+            self.tp_percent_spin.setVisible(False)
+            self.sl_percent_spin.setVisible(False)
+            
+            # Show relevant controls for selected mode
+            if mode == "ATR":
+                self.atr_multiplier_spin.setVisible(True)
+            elif mode == "Points":
+                self.tp_points_spin.setVisible(True)
+                self.sl_points_spin.setVisible(True)
+            elif mode == "Pips":
+                self.tp_pips_spin.setVisible(True)
+                self.sl_pips_spin.setVisible(True)
+            elif mode == "Percent":
+                self.tp_percent_spin.setVisible(True)
+                self.sl_percent_spin.setVisible(True)
+                
+        except Exception as e:
+            self.log_message(f"TP/SL mode change error: {e}", "ERROR")
+    
+    def on_apply_tp_sl_settings(self):
+        """Apply TP/SL settings to controller"""
+        try:
+            mode = self.tp_sl_mode_combo.currentText()
+            
+            config_update = {
+                'tp_sl_mode': mode
+            }
+            
+            if mode == "ATR":
+                config_update['atr_multiplier'] = self.atr_multiplier_spin.value()
+            elif mode == "Points":
+                config_update['tp_points'] = self.tp_points_spin.value()
+                config_update['sl_points'] = self.sl_points_spin.value()
+            elif mode == "Pips":
+                config_update['tp_pips'] = self.tp_pips_spin.value()
+                config_update['sl_pips'] = self.sl_pips_spin.value()
+            elif mode == "Percent":
+                config_update['tp_percent'] = self.tp_percent_spin.value()
+                config_update['sl_percent'] = self.sl_percent_spin.value()
+            
+            self.controller.update_config(config_update)
+            self.log_message(f"TP/SL settings applied: {mode} mode", "INFO")
+            
+        except Exception as e:
+            self.log_message(f"TP/SL settings apply error: {e}", "ERROR")
     
     # Event handlers with comprehensive error handling
     def on_connect(self):
@@ -976,28 +1106,33 @@ class MainWindow(QMainWindow):
             if 'time' in data:
                 self.time_label.setText(data['time'].strftime("%H:%M:%S"))
             
-            # Update indicators with safe access
-            if 'indicators_m1' in data and data['indicators_m1']:
-                ind_m1 = data['indicators_m1']
+        except Exception as e:
+            print(f"Market data update error: {e}")
+    
+    @Slot(dict)
+    def update_indicators_display(self, indicators: Dict):
+        """Update indicators display"""
+        try:
+            # Update M1 indicators
+            if 'M1' in indicators and indicators['M1']:
+                ind_m1 = indicators['M1']
                 self.ema_fast_m1_label.setText(f"{ind_m1.get('ema_fast', 0):.5f}" if ind_m1.get('ema_fast') else "N/A")
                 self.ema_medium_m1_label.setText(f"{ind_m1.get('ema_medium', 0):.5f}" if ind_m1.get('ema_medium') else "N/A")
                 self.ema_slow_m1_label.setText(f"{ind_m1.get('ema_slow', 0):.5f}" if ind_m1.get('ema_slow') else "N/A")
                 self.rsi_m1_label.setText(f"{ind_m1.get('rsi', 0):.2f}" if ind_m1.get('rsi') else "N/A")
                 self.atr_m1_label.setText(f"{ind_m1.get('atr', 0):.5f}" if ind_m1.get('atr') else "N/A")
             
-            if 'indicators_m5' in data and data['indicators_m5']:
-                ind_m5 = data['indicators_m5']
+            # Update M5 indicators
+            if 'M5' in indicators and indicators['M5']:
+                ind_m5 = indicators['M5']
                 self.ema_fast_m5_label.setText(f"{ind_m5.get('ema_fast', 0):.5f}" if ind_m5.get('ema_fast') else "N/A")
                 self.ema_medium_m5_label.setText(f"{ind_m5.get('ema_medium', 0):.5f}" if ind_m5.get('ema_medium') else "N/A")
                 self.ema_slow_m5_label.setText(f"{ind_m5.get('ema_slow', 0):.5f}" if ind_m5.get('ema_slow') else "N/A")
                 self.rsi_m5_label.setText(f"{ind_m5.get('rsi', 0):.2f}" if ind_m5.get('rsi') else "N/A")
                 self.atr_m5_label.setText(f"{ind_m5.get('atr', 0):.5f}" if ind_m5.get('atr') else "N/A")
-            
-            # Update system status
-            self.last_tick_label.setText(datetime.now().strftime("%H:%M:%S"))
-            
+                
         except Exception as e:
-            print(f"Market data update error: {e}")
+            print(f"Indicators update error: {e}")
     
     @Slot(dict)
     def update_trade_signal(self, signal: Dict):
@@ -1104,7 +1239,7 @@ class MainWindow(QMainWindow):
                 self.system_time_label.setText(datetime.now().strftime("%H:%M:%S"))
             
             # Update time in dashboard
-            if hasattr(self, 'time_label'):
+            if hasattr(self, 'time_label') and self.controller.is_connected:
                 self.time_label.setText(datetime.now().strftime("%H:%M:%S"))
             
             # Update positions if controller is available and connected
