@@ -1,0 +1,195 @@
+Kamu adalah developer Python yang akan MEMPERBAIKI bot trading MT5 di Windows (bukan bikin dummy).
+Bot ini fokus 1 strategi & 1 simbol (default XAUUSD/XAUUSDm/XAUUSDC), GUI PySide6, analisa otomatis,
+auto-order, dan TP/SL fleksibel (ATR, Points, Pips, Persentase Balance).
+
+Masalah krusial yang HARUS kamu bereskan:
+1) Bot TIDAK melakukan analisa saat Start (buktinya Log kosong / tidak update).
+2) Bot TIDAK mengambil order otomatis setelah analisa (tidak ada order walau sinyal).
+3) Tidak ada input TP/SL untuk user sesuai mode (terutama Persentase Balance & Pips).
+
+Tugasmu: temukan penyebab, perbaiki, dan lengkapi fitur sampai lulus ACCEPTANCE TESTS di bawah.
+
+========================================
+A. ARSITEKTUR & THREADING (WAJIB)
+========================================
+- Gunakan PySide6 dengan QThread/Worker untuk:
+  (1) koneksi & polling MT5 (tick + bars),
+  (2) analisa/strategi,
+  (3) eksekusi order.
+- GUI TIDAK BOLEH freeze. Semua operasi MT5 & analisa berjalan di thread terpisah.
+- Pastikan sinyal Qt terhubung: worker -> controller -> GUI (update metrics, logs, sinyal).
+- Tambahkan HEARTBEAT LOG setiap 1 detik dari worker analisa: 
+  format: "[HB] analyzer alive t=<iso time> bars(M1)=<n> bars(M5)=<n>".
+
+========================================
+B. PRE-FLIGHT CHECKS (SEBELUM START)
+========================================
+- Saat klik Connect:
+  1) mt5.initialize() + login; log hasil dan tangani semua error/None.
+  2) symbol_select(symbol)=True, jika gagal: tampilkan error & disable Start.
+  3) Fetch symbol_info: point, digits, trade_contract_size, trade_tick_value, volume_min/step, freeze_level, stops_level, trade_mode.
+  4) Tampilkan di Logs ringkas info simbol & akun.
+- Saat klik Start:
+  - Validasi semua input GUI (mode TP/SL, nilai %, pips/points, risk%, spread cap, session).
+  - Cek session (Asia/Jakarta GMT+7), default: London open & NY overlap.
+  - Tulis "[START] analysis thread starting..." ke Logs. Jika setelah 2 detik tidak ada heartbeat/log indikator → anggap BUG.
+
+========================================
+C. DATA & INDIKATOR LIVE (WAJIB)
+========================================
+- Polling tick setiap 250–500ms: Bid, Ask, Spread(points). Update Dashboard.
+- Ambil bar M1 & M5 kontinu, minimal 200 candle terakhir.
+- Hitung indikator akurat:
+  - EMA (recursive alpha = 2/(n+1)) atau iMA MT5,
+  - RSI Wilder (EMA gains/losses) atau iRSI MT5,
+  - ATR (True Range) atau iATR MT5.
+- Tulis ke Logs saat start: "indicators ready: ema=[..], rsi=[..], atr=[..]".
+- Jika gagal ambil data (None/empty): tulis error + retry backoff.
+
+========================================
+D. STRATEGI (SATU STRATEGI, SATU SIMBOL)
+========================================
+- Trend filter (M5):
+  BUY jika EMA9>EMA21 & price>EMA50; SELL jika EMA9<EMA21 & price<EMA50.
+- Entry (M1 pullback continuation):
+  Pullback ke EMA9/EMA21 lalu close kembali searah tren.
+  Opsi: RSI re-cross 50 (checkbox).
+  Hindari doji: body < 30% dari range → skip.
+- Spread filter: skip jika spread > max_spread_points.
+- Session filter aktif (configurable).
+- Untuk tiap bar M1 close, evaluasi sekali (hindari double-entry di bar yang sama).
+- LOG DETAIL saat sinyal muncul:
+  "[SIGNAL] side=BUY price=..., trend_ok=1, pullback_ok=1, rsi_ok=1, spread=..., atr_pts=..., reason=..."
+
+========================================
+E. TP/SL MODES (WAJIB ADA & BERFUNGSI)
+========================================
+Dropdown "TP/SL Mode": ATR | Points | Pips | Balance%
+- ATR: SL = max(minSL_points, k×ATR_M1), TP = R×SL.
+- Points: langsung pakai points.
+- Pips: points = pips × (10 jika digits in {3,5} else 1).
+- Balance%:
+  tp_usd = balance × tp_percent
+  sl_usd = balance × sl_percent
+  tp_points = tp_usd / (tick_value × lot)
+  sl_points = sl_usd / (tick_value × lot)
+- Konversi harga:
+  BUY: entry=Ask, TP=entry + tp_points*point, SL=entry - sl_points*point
+  SELL: entry=Bid, TP=entry - tp_points*point, SL=entry + sl_points*point
+- GUI harus punya input dinamis sesuai mode. Jika user isi → override default; jika kosong → pakai default strategi.
+- Validasi min distance vs stops_level/freeze_level; adjust & log.
+
+========================================
+F. LOT SIZING & ORDER EXECUTION
+========================================
+- Risk% per trade → hitung lot by SL distance:
+  lot_raw = (balance × (risk_percent/100)) / (sl_points × tick_value)
+  lot = clamp(round_to_step(lot_raw, volume_step), volume_min..volume_max)
+- BUY pakai Ask; SELL pakai Bid. Deviation configurable.
+- Kirim TRADE_ACTION_DEAL dengan SL/TP sudah terpasang.
+- Fallback type_filling IOC→FOK jika ditolak (cek broker).
+- Tangani requotes & retest price (max 2 retry). Log setiap percobaan.
+- Setelah result diterima: verifikasi ticket > 0, tulis:
+  "[ORDER OK] ticket=..., side=..., lot=..., entry=..., sl=..., tp=..., slippage=...".
+  Jika gagal: "[ORDER FAIL] code=..., comment=..., details=traceback".
+
+========================================
+G. RISK CONTROLS REAL-TIME
+========================================
+- Daily loss limit % (berbasis equity awal hari): jika tercapai → stop trading + log merah.
+- Max trades/day & max consecutive losses → cooldown.
+- Emergency Stop: tombol GUI "Close All" menutup semua posisi & stop bot.
+- Status bar di Dashboard menampilkan: spread_ok/session_ok/risk_ok (ikon/warna).
+
+========================================
+H. LOGGING, DIAGNOSTIK & CSV
+========================================
+- Semua event penting ke GUI Logs + file CSV:
+  time, side, entry, sl, tp, lot, result(R/PNL), spread_pts, atr_pts, mode, reason.
+- Tangkap dan log stacktrace untuk semua exception (tidak boleh "silent fail").
+- Tambah tombol "Export Logs" (CSV).
+- Tambah "Diagnostic: Doctor" yang menjalankan serangkaian cek dan menulis WARNING/ERROR:
+  - MT5 initialized & logged in
+  - Symbol trade_mode=TRADE_MODE_FULL
+  - point/digits/contract_size/tick_value valid
+  - volume_step/min valid
+  - stops_level/freeze_level aman
+  - data feed: tick & bars masuk (counter bertambah)
+  - threads alive (heartbeats terlihat)
+
+========================================
+I. OPEN POSITIONS PANEL
+========================================
+- Tampilkan posisi aktif (ticket, type, volume, price, SL, TP, profit).
+- Update setiap 1 detik.
+- Tombol "Close Selected" & "Close All".
+
+========================================
+J. SYM AUTODETECT + WARNING
+========================================
+- Jika symbol ≠ XAUUSD* tampilkan warning GUI:
+  "Strategi dioptimalkan untuk XAU; parameter perlu penyesuaian."
+- Semua kalkulasi pakai spesifikasi symbol yang diambil dari MT5.
+
+========================================
+K. PERBAIKI MASALAH KRUSIAL INI (MINIMAL)
+========================================
+1) ANALISA TIDAK JALAN (LOG KOSONG):
+   - Pastikan Start meng-emit signal ke analyzer thread.
+   - Pastikan analyzer memulai loop dan menulis heartbeat + indikator pertama ≤ 2 detik.
+   - Jika bars None/empty, lakukan fetch ulang dengan retry dan log error jelas.
+
+2) AUTO-ORDER TIDAK JALAN SETELAH SINYAL:
+   - Pastikan fungsi "maybe_execute_signal" terpanggil ketika sinyal valid.
+   - Cek semua guard (spread_ok, session_ok, risk_ok) tidak selalu false.
+   - Pastikan kalkulasi lot dan SL/TP tidak menghasilkan invalid stops / lot < volume_min.
+   - Tulis "[EXECUTE] attempting order..." sebelum order, supaya terlihat di Logs.
+
+3) INPUT TP/SL USER BELUM ADA:
+   - Tambahkan field GUI & baca nilainya di controller.
+   - Implementasikan ke 4 mode (ATR/Points/Pips/Balance%).
+   - Validasi & fallback ke default jika field kosong.
+
+========================================
+L. ACCEPTANCE TESTS (HARUS LULUS)
+========================================
+1) Start → Dalam ≤ 2 detik, Logs menampilkan:
+   - "[START] analysis thread starting..."
+   - "[HB] analyzer alive ..." (berulang tiap 1 detik)
+   - "indicators ready ..." (sekali saat siap)
+   - "tick: bid=..., ask=..., spread_pts=..." (berkala)
+2) Saat kondisi sinyal terpenuhi (bisa pakai setting longgar untuk uji):
+   - Logs tampil "[SIGNAL] side=..., reason=..., spread=..., atr_pts=..."
+   - Jika shadow_mode=OFF → muncul "[EXECUTE]" lalu "[ORDER OK]" ATAU "[ORDER FAIL]" dengan kode & penjelasan.
+3) Ganti TP/SL Mode (ATR → Points → Pips → Balance%) dan isi field:
+   - Order terkirim dengan harga SL/TP sesuai mode (cek di result).
+4) Risk controls:
+   - Set daily_loss_limit kecil → setelah tercapai, bot auto stop & tampil "[RISK STOP] daily loss limit hit".
+5) GUI tidak freeze & tombol Emergency Stop menutup posisi.
+
+========================================
+M. OUTPUT YANG HARUS KAMU KIRIM
+========================================
+- Kode lengkap yang sudah DIPERBAIKI (controller, workers, utils, indicators, gui).
+- Penjelasan ringkas: bug utama yang ditemukan + SOLUSI yang diterapkan (bullet list).
+- Petunjuk run Windows:
+  pip install -r requirements.txt
+  python main.py
+- Tidak ada dummy data. Semua call MT5 nyata (boleh sediakan DIAGNOSTIC/MOCK opsional, tapi default=real).
+
+========================================
+CATATAN TEKNIS PENTING (HARUS DIPATUHI)
+========================================
+- BUY pakai Ask, SELL pakai Bid.
+- Konversi pips↔points sesuai digits: digits in {3,5} → 1 pip = 10 points.
+- Gunakan volume_step & volume_min saat round lot.
+- Hormati stops_level & freeze_level; adjust SL/TP bila perlu.
+- Tangani requote & ORDER_FILLING (IOC→FOK fallback).
+- Timezone Asia/Jakarta (UTC+7) untuk session filter.
+- Semua exception harus di-log dengan traceback; jangan swallow.
+
+DEFINITION OF DONE:
+- Semua Acceptance Tests lulus.
+- Start selalu memunculkan heartbeat & indikator di Logs.
+- Sinyal valid → eksekusi order (non-shadow) dengan SL/TP sesuai mode.
+- Tidak freeze di Windows.

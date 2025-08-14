@@ -75,29 +75,33 @@ class TechnicalIndicators:
             gains = np.where(delta > 0, delta, 0)
             losses = np.where(delta < 0, -delta, 0)
             
-            # Calculate average gains and losses
+            # Calculate average gains and losses using EMA (Wilder's smoothing)
+            alpha = 1.0 / period
+            
             avg_gains = np.zeros(len(gains))
             avg_losses = np.zeros(len(losses))
             
-            # Initial averages (SMA)
+            # First average is SMA
             avg_gains[period-1] = np.mean(gains[:period])
             avg_losses[period-1] = np.mean(losses[:period])
             
-            # Calculate smoothed averages
+            # EMA for remaining values
             for i in range(period, len(gains)):
-                avg_gains[i] = (avg_gains[i-1] * (period - 1) + gains[i]) / period
-                avg_losses[i] = (avg_losses[i-1] * (period - 1) + losses[i]) / period
+                avg_gains[i] = alpha * gains[i] + (1 - alpha) * avg_gains[i-1]
+                avg_losses[i] = alpha * losses[i] + (1 - alpha) * avg_losses[i-1]
             
             # Calculate RSI
             rsi_values = np.zeros(len(data))
-            rsi_values[:period] = 50.0  # Default RSI for insufficient data
             
-            for i in range(period, len(data)):
-                if avg_losses[i-1] == 0:
+            for i in range(period-1, len(data)):
+                if avg_losses[i] == 0:
                     rsi_values[i] = 100.0
                 else:
-                    rs = avg_gains[i-1] / avg_losses[i-1]
+                    rs = avg_gains[i] / avg_losses[i]
                     rsi_values[i] = 100.0 - (100.0 / (1.0 + rs))
+            
+            # Set initial values to 50
+            rsi_values[:period-1] = 50.0
             
             return rsi_values
             

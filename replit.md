@@ -8,6 +8,24 @@ This is a professional automated trading bot for MetaTrader 5 (MT5) designed spe
 
 Preferred communication style: Simple, everyday language.
 
+# Recent Changes - August 14, 2025
+
+## Major Bug Fixes Applied
+1. **Analysis Threading Fixed**: Implemented proper AnalysisWorker(QThread) with heartbeat logging every 1 second
+2. **Auto-Order Execution Fixed**: Added handle_trading_signal() with automatic order execution for non-shadow mode
+3. **TP/SL Input System Added**: Created dynamic GUI inputs for ATR/Points/Pips/Balance% modes
+4. **Real-time Data Feed**: Implemented continuous tick and bar data fetching with error handling
+5. **Risk Management Enhanced**: Added daily loss limits, position monitoring, and emergency controls
+
+## Files Created/Fixed
+- `fixed_controller.py`: Main controller with proper threading and signal execution
+- `fixed_gui.py`: Enhanced GUI with dynamic TP/SL inputs and status indicators  
+- `fixed_main.py`: Production-ready entry point with comprehensive error handling
+- `PERBAIKAN_SELESAI.md`: Complete documentation of all fixes applied
+
+## Status
+All critical issues resolved. Bot now ready for professional trading on Windows with MT5, or demo mode on other platforms.
+
 # System Architecture
 
 ## Frontend Architecture

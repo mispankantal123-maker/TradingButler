@@ -7,27 +7,7 @@ channel = "stable-25_05"
 packages = ["fontconfig", "freetype", "glib", "glibcLocales", "libGL", "libxcrypt", "libxkbcommon", "mesa", "qt6.qtbase", "xorg.libX11", "xorg.libXext"]
 
 [workflows]
-runButton = "MT5 Trading Bot"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "MT5 Scalping Bot"
-
-[[workflows.workflow]]
-name = "MT5 Scalping Bot"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "vnc"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python complete_scalping_bot.py"
+runButton = "Project"
 
 [[workflows.workflow]]
 name = "MT5 Real Trading Bot"
@@ -46,3 +26,23 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python main.py"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Fixed MT5 Scalping Bot"
+
+[[workflows.workflow]]
+name = "Fixed MT5 Scalping Bot"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python fixed_main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
